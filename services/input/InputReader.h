@@ -267,6 +267,12 @@ public:
      * The changes flag is a bitfield that indicates what has changed and whether
      * the input devices must all be reopened. */
     virtual void requestRefreshConfiguration(uint32_t changes) = 0;
+    virtual void resetTouchCalibration() = 0;
+	virtual void keyEnterMouseMode() = 0;
+	virtual void keyExitMouseMode() = 0;
+	virtual void keySetMouseDistance(int distance) = 0;
+	virtual void keySetMouseMoveCode(int left,int right,int top,int bottom) = 0;
+	virtual void keySetMouseBtnCode(int leftbtn,int midbtn,int rightbtn) = 0;
 };
 
 
@@ -335,6 +341,13 @@ public:
 
     virtual void requestRefreshConfiguration(uint32_t changes);
 
+	virtual void resetTouchCalibration();
+
+	virtual void keyEnterMouseMode();	
+	virtual void keyExitMouseMode();	
+	virtual void keySetMouseDistance(int distance);	
+	virtual void keySetMouseMoveCode(int left,int right,int top,int bottom);	
+	virtual void keySetMouseBtnCode(int leftbtn,int midbtn,int rightbtn);
 protected:
     // These members are protected so they can be instrumented by test cases.
     virtual InputDevice* createDeviceLocked(int32_t deviceId,
@@ -372,6 +385,7 @@ private:
     // The event queue.
     static const int EVENT_BUFFER_SIZE = 256;
     RawEvent mEventBuffer[EVENT_BUFFER_SIZE];
+	RawEvent mConvertEventBuffer[EVENT_BUFFER_SIZE];
 
     KeyedVector<int32_t, InputDevice*> mDevices;
 
@@ -381,11 +395,28 @@ private:
     void addDeviceLocked(nsecs_t when, int32_t deviceId);
     void removeDeviceLocked(nsecs_t when, int32_t deviceId);
     void processEventsForDeviceLocked(int32_t deviceId, const RawEvent* rawEvents, size_t count);
+	void convertEvent(const RawEvent* rawEvents,size_t count);
     void timeoutExpiredLocked(nsecs_t when);
-
+	InputDevice* createVirtualMouse(const String8& name,uint32_t classes);
+    void addVirtualMouseDevice(nsecs_t when,uint32_t classes); 
+	InputDevice* createVirtualTouch(const String8& name,uint32_t classes);
+    void addVirtualTouchDevice(nsecs_t when,uint32_t classes); 
     void handleConfigurationChangedLocked(nsecs_t when);
 
     int32_t mGlobalMetaState;
+	bool        mKeyInMouseMode;    
+	bool        mKeySynced;		
+	bool		mVirtualTouchCreated;    
+	bool        mVirtualMouseCreated;    
+	int32_t     mDistance;    
+	int         mKeyDeviceId;    
+	int         mMouseDeviceId;  
+	static const int MAX_MOUSE_SIZE = 10;
+	int         mRealMouseDeviceId[MAX_MOUSE_SIZE];	
+	int 		mTouchDeviceId;		
+	int 		mRealTouchDeviceId;    
+	int         mLeft,mRight,mTop,mBottom;    
+	int         mLeftBtn,mRightBtn,mMidBtn;
     void updateGlobalMetaStateLocked();
     int32_t getGlobalMetaStateLocked();
 
@@ -461,6 +492,7 @@ public:
     int32_t getMetaState();
 
     void fadePointer();
+	void unfadePointer();
 
     void notifyReset(nsecs_t when);
 
@@ -503,13 +535,15 @@ private:
 /* Keeps track of the state of mouse or touch pad buttons. */
 class CursorButtonAccumulator {
 public:
+	int32_t mOtherScanCode;
+	
     CursorButtonAccumulator();
     void reset(InputDevice* device);
 
     void process(const RawEvent* rawEvent);
 
     uint32_t getButtonState() const;
-
+	
 private:
     bool mBtnLeft;
     bool mBtnRight;
@@ -519,6 +553,8 @@ private:
     bool mBtnForward;
     bool mBtnExtra;
     bool mBtnTask;
+	bool mBtnOther;
+	
 
     void clearButtons();
 };
@@ -840,6 +876,7 @@ public:
     virtual int32_t getMetaState();
 
     virtual void fadePointer();
+	virtual void unfadePointer();
 
 protected:
     InputDevice* mDevice;
@@ -892,6 +929,7 @@ private:
         int32_t scanCode;
     };
 
+	int	mDefaultUsbWakeup;
     uint32_t mSource;
     int32_t mKeyboardType;
 
@@ -900,7 +938,10 @@ private:
     Vector<KeyDown> mKeyDowns; // keys that are down
     int32_t mMetaState;
     nsecs_t mDownTime; // time of most recent key down
-
+    static const int MAX_KEYDOWNNUM = 10;
+	bool    mIsRepeatMode;
+	bool    mCurrentDown[MAX_KEYDOWNNUM];
+	int32_t mCurrentScanCode[MAX_KEYDOWNNUM];
     struct LedState {
         bool avail; // led is available
         bool on;    // we think the led is currently on
@@ -944,10 +985,10 @@ public:
     virtual void configure(nsecs_t when, const InputReaderConfiguration* config, uint32_t changes);
     virtual void reset(nsecs_t when);
     virtual void process(const RawEvent* rawEvent);
-
     virtual int32_t getScanCodeState(uint32_t sourceMask, int32_t scanCode);
 
     virtual void fadePointer();
+	virtual void unfadePointer();
 
 private:
     // Amount that trackball needs to move in order to generate a key event.
@@ -1006,6 +1047,11 @@ public:
     virtual uint32_t getSources();
     virtual void populateDeviceInfo(InputDeviceInfo* deviceInfo);
     virtual void dump(String8& dump);
+    //get tp correct params
+    int _get_str2int(char *saddr, int *flag);    
+	int _get_item(char *saddr, char *name, char *value, unsigned int line_len);    
+	int _get_line(char *daddr, int  *flag, unsigned int total_len);
+	virtual int tp_getpara(int  *tp_para);
     virtual void configure(nsecs_t when, const InputReaderConfiguration* config, uint32_t changes);
     virtual void reset(nsecs_t when);
     virtual void process(const RawEvent* rawEvent);
@@ -1018,6 +1064,7 @@ public:
     virtual void fadePointer();
     virtual void timeoutExpired(nsecs_t when);
 
+    int tp_para[7];
 protected:
     CursorButtonAccumulator mCursorButtonAccumulator;
     CursorScrollAccumulator mCursorScrollAccumulator;
@@ -1188,12 +1235,12 @@ protected:
 
     virtual void syncTouch(nsecs_t when, bool* outHavePointerIds) = 0;
 
+    bool mNeedCorrect;
+	int32_t mSurfaceWidth;
+    int32_t mSurfaceHeight;
 private:
     // The surface orientation and width and height set by configureSurface().
     int32_t mSurfaceOrientation;
-    int32_t mSurfaceWidth;
-    int32_t mSurfaceHeight;
-
     // The associated display orientation and width and height set by configureSurface().
     int32_t mAssociatedDisplayOrientation;
     int32_t mAssociatedDisplayWidth;

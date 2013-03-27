@@ -20,6 +20,7 @@
 #include <utils/RefBase.h>
 #include <binder/IInterface.h>
 #include <binder/Parcel.h>
+#include "mediaplayerinfo.h"
 #include <utils/KeyedVector.h>
 
 namespace android {
@@ -40,6 +41,7 @@ public:
                                     const KeyedVector<String8, String8>* headers) = 0;
     virtual status_t        setDataSource(int fd, int64_t offset, int64_t length) = 0;
     virtual status_t        setDataSource(const sp<IStreamSource>& source) = 0;
+    virtual status_t        setDataSource(const sp<IStreamSource>& source, int type) = 0;
     virtual status_t        setVideoSurfaceTexture(
                                     const sp<ISurfaceTexture>& surfaceTexture) = 0;
     virtual status_t        prepareAsync() = 0;
@@ -56,6 +58,64 @@ public:
     virtual status_t        setVolume(float leftVolume, float rightVolume) = 0;
     virtual status_t        setAuxEffectSendLevel(float level) = 0;
     virtual status_t        attachAuxEffect(int effectId) = 0;
+
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-9-15 10:25:10 */
+    /* expend interfaces about subtitle, track and so on */
+    virtual int             getSubCount() = 0;
+    virtual int             getSubList(MediaPlayer_SubInfo *infoList, int count) = 0;
+    virtual int             getCurSub() = 0;
+    virtual status_t        switchSub(int index) = 0;
+    virtual status_t        setSubGate(bool showSub) = 0;
+    virtual bool            getSubGate() = 0;
+    virtual status_t        setSubColor(int color) = 0;
+    virtual int             getSubColor() = 0;
+    virtual status_t        setSubFrameColor(int color) = 0;
+    virtual int             getSubFrameColor() = 0;
+    virtual status_t        setSubFontSize(int size) = 0;
+    virtual int             getSubFontSize() = 0;
+    virtual status_t        setSubCharset(const char *charset) = 0;
+    virtual status_t        getSubCharset(char *charset) = 0;
+    virtual status_t        setSubPosition(int percent) = 0;
+    virtual int             getSubPosition() = 0;
+    virtual status_t        setSubDelay(int time) = 0;
+    virtual int             getSubDelay() = 0;
+    virtual int             getTrackCount() = 0;
+    virtual int             getTrackList(MediaPlayer_TrackInfo *infoList, int count) = 0;
+    virtual int             getCurTrack() = 0;
+    virtual status_t        switchTrack(int index) = 0;
+    virtual status_t        setInputDimensionType(int type) = 0;
+    virtual int             getInputDimensionType() = 0;
+    virtual status_t        setOutputDimensionType(int type) = 0;
+    virtual int             getOutputDimensionType() = 0;
+    virtual status_t        setAnaglaghType(int type) = 0;
+    virtual int             getAnaglaghType() = 0;
+    virtual status_t        getVideoEncode(char *encode) = 0;
+    virtual int             getVideoFrameRate() = 0;
+    virtual status_t        getAudioEncode(char *encode) = 0;
+    virtual int             getAudioBitRate() = 0;
+    virtual int             getAudioSampleRate() = 0;
+    /* add by Gary. end   -----------------------------------}} */
+
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-11-14 */
+    /* support scale mode */
+    virtual status_t        enableScaleMode(bool enable, int width, int height) = 0;
+    /* add by Gary. end   -----------------------------------}} */
+
+    /* add by Gary. start {{----------------------------------- */
+    /* 2012-03-07 */
+    /* set audio channel mute */
+    virtual status_t        setChannelMuteMode(int muteMode) = 0;
+    virtual int             getChannelMuteMode() = 0;
+    /* add by Gary. end   -----------------------------------}} */
+
+    /* add by Gary. start {{----------------------------------- */
+    /* 2012-4-24 */
+    /* add two general interfaces for expansibility */
+    virtual status_t        generalInterface(int cmd, int int1, int int2, int int3, void *p) = 0;
+    /* add by Gary. end   -----------------------------------}} */
+
     virtual status_t        setParameter(int key, const Parcel& request) = 0;
     virtual status_t        getParameter(int key, Parcel* reply) = 0;
 

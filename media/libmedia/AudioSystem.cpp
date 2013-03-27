@@ -25,6 +25,7 @@
 
 #include <system/audio.h>
 
+#include <cutils/properties.h>
 // ----------------------------------------------------------------------------
 
 namespace android {
@@ -187,12 +188,61 @@ static const float dBPerStep = 0.5f;
 static const float dBConvert = -dBPerStep * 2.302585093f / 20.0f;
 static const float dBConvertInverse = 1.0f / dBConvert;
 
+typedef struct linearToLogStruct {
+  int index;
+  float value;
+}linearToLogStruct;
+
+static linearToLogStruct linearToLogTab[] = {
+        {0  , 0.000000},
+        {6  , 0.004467},
+        {13 , 0.006683},
+        {20 , 0.010000},
+        {26 , 0.014125},
+        {33 , 0.021135},
+        {40 , 0.031623},
+        {46 , 0.044668},
+        {53 , 0.066834},
+        {60 , 0.100000},
+        {66 , 0.141254},
+        {73 , 0.211349},
+        {80 , 0.316228},
+        {86 , 0.446684},
+        {93 , 0.668344},
+        {100, 1.000000}
+};
+
 float AudioSystem::linearToLog(int volume)
 {
+	char value[PROPERTY_VALUE_MAX];
+	int len;
+	int ret = 0;
+	len = property_get("audio.defCurve", value, "false");
+	if(!strcmp(value,"true") || !strcmp(value,"yes")){
+		ret = 0;	
+	}
+	else{
+		ret = 1;
+	}
+	
+#if ret
+	int i,n;
+
+	volume = volume > 100 ? 100:(volume<0?0:volume);
+	n = sizeof(linearToLogTab)/sizeof(linearToLogTab[0]);
+	for(i=0; i<n ;i++){
+		if(volume <= linearToLogTab[i].index){
+			break;
+		}
+	}
+	LOGD("----linearToLog(%d)=%f", volume, linearToLogTab[i].value);
+	return volume ? linearToLogTab[i].value : 0;
     // float v = volume ? exp(float(100 - volume) * dBConvert) : 0;
     // LOGD("linearToLog(%d)=%f", volume, v);
     // return v;
+#else
     return volume ? exp(float(100 - volume) * dBConvert) : 0;
+#endif
 }
 
 int AudioSystem::logToLinear(float volume)

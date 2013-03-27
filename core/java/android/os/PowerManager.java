@@ -473,6 +473,23 @@ public class PowerManager
         }
     }
 
+    /**
+     * sets the wisebrightmode of the display.
+     *
+     * @param mode true or false
+     *
+     * {@hide}
+     */
+
+	public void setWiseBacklightMode(int mode)
+	{
+
+		try{
+			mService.setWiseBacklightMode(mode);
+		} catch (RemoteException e) {
+        }
+	}
+
    /**
      * Returns the set of flags for {@link #newWakeLock(int, String) newWakeLock()}
      * that are supported on the device.

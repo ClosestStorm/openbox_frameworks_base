@@ -76,7 +76,6 @@ private:
     void                setCameraFree(int cameraId);
 
     // sounds
-    audio_stream_type_t mAudioStreamType;
     MediaPlayer*        newMediaPlayer(const char *file);
 
     Mutex               mSoundLock;
@@ -214,6 +213,13 @@ private:
     };
 
     camera_module_t *mModule;
+
+	// add member
+	static	int 				mOverlayScreen;
+
+public:
+	// add for set overlay screen
+	int							setCameraScreen(int screen);
 };
 
 } // namespace android

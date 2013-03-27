@@ -36,6 +36,7 @@ import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.Region;
 import android.media.AudioManager;
+import android.os.ServiceManager;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Debug;
@@ -85,6 +86,25 @@ import java.io.PrintWriter;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
+import android.content.pm.ApplicationInfo;
+
+
+/* add by Gary. start {{----------------------------------- */
+/* 2011-12-23 */
+/* flicker led when receive ir signal */
+import android.os.Gpio;
+import android.os.Handler;
+import java.lang.Runnable;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
+/* add by Gary. end   -----------------------------------}} */
+
+/* add by Gary. start {{----------------------------------- */
+/* 2012-01-29 */
+/* add a new function 'getProductName()' in ProducSpec and define some produects' names */
+import com.android.internal.allwinner.config.ProductConfig;
+/* add by Gary. end   -----------------------------------}} */
 
 /**
  * The top of a view hierarchy, implementing the needed protocol between View
@@ -93,7 +113,7 @@ import java.util.List;
  *
  * {@hide}
  */
-@SuppressWarnings({"EmptyCatchBlock", "PointlessBooleanExpression"})
+//@SuppressWarnings({"EmptyCatchBlock", "PointlessBooleanExpression"})
 public final class ViewRootImpl extends Handler implements ViewParent,
         View.AttachInfo.Callbacks, HardwareRenderer.HardwareDrawCallbacks {
     private static final String TAG = "ViewRootImpl";
@@ -276,6 +296,80 @@ public final class ViewRootImpl extends Handler implements ViewParent,
     private Thread mRenderProfiler;
     private volatile boolean mRenderProfilingEnabled;
 
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-12-23 */
+    /* flicker led when receive ir signal */
+    private Handler mFlickerHandler = new Handler();
+    private boolean mFlickerEnable  = true;
+    private static final int FLICKER_INTERVAL = 30;
+    private Context mContext = null;
+    
+    private BroadcastReceiver mFlickerIntentReceiver = null;
+//    private BroadcastReceiver mFlickerIntentReceiver = new BroadcastReceiver() {
+//        @Override
+//        public void onReceive(Context context, Intent intent) {
+//            String action = intent.getAction();
+//            Slog.d(TAG, "action = " + action);
+//            if (action.equals(Intent.ACTION_SCREEN_ON)) {
+//                mFlickerEnable = true;
+//            }else if (action.equals(Intent.ACTION_SCREEN_OFF)) {
+//                mFlickerEnable = false;
+//                mFlickerHandler.removeCallbacks(mStep1On);
+//                mFlickerHandler.removeCallbacks(mStep2Off);
+//                mFlickerHandler.removeCallbacks(mStep3On);
+//                Gpio.writeGpio('h', 20, 0);
+//            }
+//        }
+//    };
+    
+    private void startFlicker(){
+        if(mFlickerEnable){
+            if(ProductConfig.PRODUCT_NAME_APOLLO_MELE.equals(ProductConfig.getProductSpec().getProductName())){
+                Gpio.writeGpio('h', 20, 0);
+            }
+            mFlickerHandler.removeCallbacks(mStep1On);
+            mFlickerHandler.removeCallbacks(mStep2Off);
+            mFlickerHandler.removeCallbacks(mStep3On);
+            mFlickerHandler.postDelayed(mStep1On, FLICKER_INTERVAL);
+        }
+    }
+    
+    private Runnable mStep1On = new Runnable() {
+        public void run(){
+            if(mFlickerEnable){
+                if(ProductConfig.PRODUCT_NAME_APOLLO_MELE.equals(ProductConfig.getProductSpec().getProductName())){
+                    Gpio.writeGpio('h', 20, 1);
+                }
+                mFlickerHandler.removeCallbacks(mStep2Off);
+                mFlickerHandler.removeCallbacks(mStep3On);
+                mFlickerHandler.postDelayed(mStep2Off, FLICKER_INTERVAL);
+            }
+        }
+    };
+    
+    private Runnable mStep2Off = new Runnable() {
+        public void run(){
+            if(mFlickerEnable){
+                if(ProductConfig.PRODUCT_NAME_APOLLO_MELE.equals(ProductConfig.getProductSpec().getProductName())){
+                    Gpio.writeGpio('h', 20, 0);
+                }
+                mFlickerHandler.removeCallbacks(mStep3On);
+                mFlickerHandler.postDelayed(mStep3On, FLICKER_INTERVAL);
+            }
+        }
+    };
+    
+    private Runnable mStep3On = new Runnable() {
+        public void run(){
+            if(mFlickerEnable){
+                if(ProductConfig.PRODUCT_NAME_APOLLO_MELE.equals(ProductConfig.getProductSpec().getProductName())){
+                    Gpio.writeGpio('h', 20, 1);
+                }
+            }
+        }
+    };
+    /* add by Gary. end   -----------------------------------}} */
+
     // Variables to track frames per second, enabled via DEBUG_FPS flag
     private long mFpsStartTime = -1;
     private long mFpsPrevTime = -1;
@@ -296,6 +390,8 @@ public final class ViewRootImpl extends Handler implements ViewParent,
 
     private final int mDensity;
 
+	private static IWindowManager mWindowManager;
+
     /**
      * Consistency verifier for debugging purposes.
      */
@@ -310,6 +406,7 @@ public final class ViewRootImpl extends Handler implements ViewParent,
                     InputMethodManager imm = InputMethodManager.getInstance(mainLooper);
                     sWindowSession = Display.getWindowManager().openSession(
                             imm.getClient(), imm.getInputContext());
+					mWindowManager	= IWindowManager.Stub.asInterface(ServiceManager.getService("window"));
                     mInitialized = true;
                 } catch (RemoteException e) {
                 }
@@ -367,6 +464,18 @@ public final class ViewRootImpl extends Handler implements ViewParent,
         mFallbackEventHandler = PolicyManager.makeNewFallbackEventHandler(context);
         mProfileRendering = Boolean.parseBoolean(
                 SystemProperties.get(PROPERTY_PROFILE_RENDERING, "false"));
+
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-23 */
+        /* flicker led when receive ir signal */
+        mContext = context;
+        IntentFilter flickerFilter = new IntentFilter();
+        
+        flickerFilter.addAction(Intent.ACTION_SCREEN_ON);
+        flickerFilter.addAction(Intent.ACTION_SCREEN_OFF);
+        
+//        mContext.registerReceiver(mFlickerIntentReceiver, flickerFilter, null, mFlickerHandler);
+        /* add by Gary. end   -----------------------------------}} */
     }
 
     public static void addFirstDrawHandler(Runnable callback) {
@@ -605,8 +714,28 @@ public final class ViewRootImpl extends Handler implements ViewParent,
         if (mTranslator != null) return;
 
         // Try to enable hardware acceleration if requested
-        final boolean hardwareAccelerated = 
+         boolean hardwareAccelerated = 
                 (attrs.flags & WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED) != 0;
+		
+		if(true)
+		{
+			String  			pckname;
+    		String              substr = "com.aurorasoftworks.quadrant";
+	    	ApplicationInfo   	appInfo;
+	    	int					index;
+	    	
+	    	pckname = mView.getContext().getPackageName();
+	    	
+	    	Log.d(TAG,"pckname = " + pckname);
+	    	
+	    	index  = pckname.indexOf(substr);
+	        if(index >= 0)
+            {
+            	hardwareAccelerated = true;
+            }
+
+    	}
+		
 
         if (hardwareAccelerated) {
             if (!HardwareRenderer.isAvailable()) {
@@ -1216,7 +1345,8 @@ public final class ViewRootImpl extends Handler implements ViewParent,
                         disposeResizeBuffer();
 
                         boolean completed = false;
-                        HardwareCanvas canvas = null;
+                        HardwareCanvas hwRendererCanvas = mAttachInfo.mHardwareRenderer.getCanvas();
+                        HardwareCanvas layerCanvas = null;
                         try {
                             if (mResizeBuffer == null) {
                                 mResizeBuffer = mAttachInfo.mHardwareRenderer.createHardwareLayer(
@@ -1225,12 +1355,12 @@ public final class ViewRootImpl extends Handler implements ViewParent,
                                     mResizeBuffer.getHeight() != mHeight) {
                                 mResizeBuffer.resize(mWidth, mHeight);
                             }
-                            canvas = mResizeBuffer.start(mAttachInfo.mHardwareCanvas);
-                            canvas.setViewport(mWidth, mHeight);
-                            canvas.onPreDraw(null);
-                            final int restoreCount = canvas.save();
+                            layerCanvas = mResizeBuffer.start(hwRendererCanvas);
+                            layerCanvas.setViewport(mWidth, mHeight);
+                            layerCanvas.onPreDraw(null);
+                            final int restoreCount = layerCanvas.save();
                             
-                            canvas.drawColor(0xff000000, PorterDuff.Mode.SRC);
+                            layerCanvas.drawColor(0xff000000, PorterDuff.Mode.SRC);
 
                             int yoff;
                             final boolean scrolling = mScroller != null
@@ -1242,27 +1372,27 @@ public final class ViewRootImpl extends Handler implements ViewParent,
                                 yoff = mScrollY;
                             }
 
-                            canvas.translate(0, -yoff);
+                            layerCanvas.translate(0, -yoff);
                             if (mTranslator != null) {
-                                mTranslator.translateCanvas(canvas);
+                                mTranslator.translateCanvas(layerCanvas);
                             }
 
-                            mView.draw(canvas);
+                            mView.draw(layerCanvas);
 
                             mResizeBufferStartTime = SystemClock.uptimeMillis();
                             mResizeBufferDuration = mView.getResources().getInteger(
                                     com.android.internal.R.integer.config_mediumAnimTime);
                             completed = true;
 
-                            canvas.restoreToCount(restoreCount);
+                            layerCanvas.restoreToCount(restoreCount);
                         } catch (OutOfMemoryError e) {
                             Log.w(TAG, "Not enough memory for content change anim buffer", e);
                         } finally {
-                            if (canvas != null) {
-                                canvas.onPostDraw();
+                            if (layerCanvas != null) {
+                                layerCanvas.onPostDraw();
                             }
                             if (mResizeBuffer != null) {
-                                mResizeBuffer.end(mAttachInfo.mHardwareCanvas);
+                                mResizeBuffer.end(hwRendererCanvas);
                                 if (!completed) {
                                     mResizeBuffer.destroy();
                                     mResizeBuffer = null;
@@ -1425,7 +1555,7 @@ public final class ViewRootImpl extends Handler implements ViewParent,
 
             if (!mStopped) {
                 boolean focusChangedDueToTouchMode = ensureTouchModeLocally(
-                        (relayoutResult&WindowManagerImpl.RELAYOUT_IN_TOUCH_MODE) != 0);
+                        (relayoutResult&WindowManagerImpl.RELAYOUT_RES_IN_TOUCH_MODE) != 0);
                 if (focusChangedDueToTouchMode || mWidth != host.getMeasuredWidth()
                         || mHeight != host.getMeasuredHeight() || contentInsetsChanged) {
                     childWidthMeasureSpec = getRootMeasureSpec(mWidth, lp.width);
@@ -1636,7 +1766,7 @@ public final class ViewRootImpl extends Handler implements ViewParent,
                 mLastDrawDurationNanos = System.nanoTime() - drawStartTime;
             }
 
-            if ((relayoutResult&WindowManagerImpl.RELAYOUT_FIRST_TIME) != 0
+            if ((relayoutResult&WindowManagerImpl.RELAYOUT_RES_FIRST_TIME) != 0
                     || mReportNextDraw) {
                 if (LOCAL_LOGV) {
                     Log.v(TAG, "FINISHED DRAWING: " + mWindowAttributes.getTitle());
@@ -1669,7 +1799,7 @@ public final class ViewRootImpl extends Handler implements ViewParent,
             }
             // We were supposed to report when we are done drawing. Since we canceled the
             // draw, remember it here.
-            if ((relayoutResult&WindowManagerImpl.RELAYOUT_FIRST_TIME) != 0) {
+            if ((relayoutResult&WindowManagerImpl.RELAYOUT_RES_FIRST_TIME) != 0) {
                 mReportNextDraw = true;
             }
             if (fullRedrawNeeded) {
@@ -2278,6 +2408,15 @@ public final class ViewRootImpl extends Handler implements ViewParent,
             mInputChannel.dispose();
             mInputChannel = null;
         }
+        
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-23 */
+        /* flicker led when receive ir signal */
+        if(mFlickerIntentReceiver != null){
+//            mContext.unregisterReceiver(mFlickerIntentReceiver);
+            mFlickerIntentReceiver = null;
+        }
+        /* add by Gary. end   -----------------------------------}} */
     }
 
     void updateConfiguration(Configuration config, boolean force) {
@@ -2462,6 +2601,7 @@ public final class ViewRootImpl extends Handler implements ViewParent,
             deliverKeyEvent((KeyEvent)msg.obj, msg.arg1 != 0);
             break;
         case DISPATCH_POINTER:
+			SurfaceView.GLAdapterMotionEvent((MotionEvent) msg.obj);
             deliverPointerEvent((MotionEvent) msg.obj, msg.arg1 != 0);
             break;
         case DISPATCH_TRACKBALL:
@@ -2867,6 +3007,18 @@ public final class ViewRootImpl extends Handler implements ViewParent,
 
         // Enter touch mode on down or scroll.
         final int action = event.getAction();
+		if(false)  //action == MotionEvent.ACTION_UP
+		{
+			try 
+			{
+	            mWindowManager.statusbarShow();
+	        } 
+	        catch (Exception e) 
+	        {
+	            Log.d(TAG,"mWindowManager.statusbarShow failed!");
+	        }
+			
+		}
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_SCROLL) {
             ensureTouchMode(true);
         }
@@ -3329,8 +3481,9 @@ public final class ViewRootImpl extends Handler implements ViewParent,
         }
 
         // If the Control modifier is held, try to interpret the key as a shortcut.
-        if (event.getAction() == KeyEvent.ACTION_UP
+        if (event.getAction() == KeyEvent.ACTION_DOWN
                 && event.isCtrlPressed()
+                && event.getRepeatCount() == 0
                 && !KeyEvent.isModifierKey(event.getKeyCode())) {
             if (mView.dispatchKeyShortcutEvent(event)) {
                 finishKeyEvent(event, sendDone, true);
@@ -3585,8 +3738,8 @@ public final class ViewRootImpl extends Handler implements ViewParent,
                 mWindow, mSeq, params,
                 (int) (mView.getMeasuredWidth() * appScale + 0.5f),
                 (int) (mView.getMeasuredHeight() * appScale + 0.5f),
-                viewVisibility, insetsPending, mWinFrame,
-                mPendingContentInsets, mPendingVisibleInsets,
+                viewVisibility, insetsPending ? WindowManagerImpl.RELAYOUT_INSETS_PENDING : 0,
+                mWinFrame, mPendingContentInsets, mPendingVisibleInsets,
                 mPendingConfiguration, mSurface);
         //Log.d(TAG, "<<<<<< BACK FROM relayout");
         if (restore) {
@@ -3716,7 +3869,7 @@ public final class ViewRootImpl extends Handler implements ViewParent,
                     // animation info.
                     try {
                         if ((relayoutWindow(mWindowAttributes, viewVisibility, false)
-                                & WindowManagerImpl.RELAYOUT_FIRST_TIME) != 0) {
+                                & WindowManagerImpl.RELAYOUT_RES_FIRST_TIME) != 0) {
                             sWindowSession.finishDrawing(mWindow);
                         }
                     } catch (RemoteException e) {
@@ -3779,6 +3932,13 @@ public final class ViewRootImpl extends Handler implements ViewParent,
     private final InputHandler mInputHandler = new InputHandler() {
         public void handleKey(KeyEvent event, InputQueue.FinishedCallback finishedCallback) {
             startInputEvent(finishedCallback);
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-23 */
+            /* flicker led when receive ir signal */
+            if(event.getAction() != KeyEvent.ACTION_UP){
+                startFlicker();
+            }
+            /* add by Gary. end   -----------------------------------}} */
             dispatchKey(event, true);
         }
 

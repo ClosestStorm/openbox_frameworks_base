@@ -41,7 +41,7 @@ LayerDim::~LayerDim()
 }
 
 void LayerDim::onDraw(const Region& clip) const
-{
+{	
     const State& s(drawingState());
     Region::const_iterator it = clip.begin();
     Region::const_iterator const end = clip.end();
@@ -66,7 +66,76 @@ void LayerDim::onDraw(const Region& clip) const
         while (it != end) {
             const Rect& r = *it++;
             const GLint sy = fbHeight - (r.top + r.height());
-            glScissor(r.left, sy, r.width(), r.height());
+
+			if(hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU)
+			{				
+				const DisplayHardware& hw(graphicPlane(0).displayHardware());
+				
+				int app_width = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+				int app_height = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+				int vp_w = hw.getWidth() * mDispWidth / app_width;
+				int vp_h = hw.getHeight() * mDispHeight / app_height;
+				int scissor_w = hw.getWidth();
+				int scissor_h = hw.getHeight();
+			
+				if(mDispWidth > app_width)
+				{
+					scissor_w = hw.getWidth()*mDispWidth/app_width;
+				}
+				if(mDispHeight > app_height)
+				{
+					scissor_h = hw.getHeight()*mDispHeight/app_height;
+				}
+				glScissor(0,0,scissor_w,scissor_h);
+				
+				if(graphicPlane(0).getOrientation() == 0)
+				{
+					glViewport(0, hw.getHeight() - vp_h, vp_w, vp_h);
+				}
+				else if(graphicPlane(0).getOrientation() == 1)
+				{
+					if(hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_TYPE,0) != DISPLAY_DEVICE_LCD)
+					{
+						glLoadIdentity();				 
+						glTranslatef(hw.getWidth()+hw.getHeight()-app_height,hw.getHeight()-hw.getWidth(),0.0f);
+						glRotatef(90,0.0f,0.0f,1.0f);
+						app_width = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+						app_height = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+						vp_w = hw.getWidth() * mDispWidth / app_width;
+						vp_h = hw.getHeight() * mDispHeight / app_height;
+					}
+					glViewport(hw.getWidth() - vp_w, hw.getHeight() - vp_h, vp_w, vp_h);
+				}
+				else if(graphicPlane(0).getOrientation() == 2)
+				{
+					if(hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_TYPE,0) != DISPLAY_DEVICE_LCD)
+					{
+						glLoadIdentity();
+						glTranslatef(hw.getWidth()+hw.getWidth()-app_width,app_height,0.0f);
+						glRotatef(180,0.0f,0.0f,1.0f);
+					}
+					glViewport(hw.getWidth() - vp_w, 0, vp_w, vp_h);
+				}
+				else if(graphicPlane(0).getOrientation() == 3)
+				{
+					if(hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_TYPE,0) != DISPLAY_DEVICE_LCD)
+					{
+						glLoadIdentity();
+						glTranslatef(0.0f,app_width,0.0f);
+						glRotatef(270,0.0f,0.0f,1.0f);
+						app_width = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+						app_height = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+						vp_w = hw.getWidth() * mDispWidth / app_width;
+						vp_h = hw.getHeight() * mDispHeight / app_height;
+					}
+					glViewport(0, 0, vp_w, vp_h);
+				}
+				LOGV("app_width:%d,app_height:%d,mDispWidth:%d,mDispHeight:%d,vp_w:%d,vp_h:%d\n",app_width,app_height,mDispWidth,mDispHeight,vp_w,vp_h);
+			}
+			else
+			{
+				glScissor(r.left, sy, r.width(), r.height());
+			}
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4); 
         }
         glDisable(GL_BLEND);

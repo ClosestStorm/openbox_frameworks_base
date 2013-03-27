@@ -148,6 +148,8 @@
         android:vibrationDuration="20"
         android:horizontalOffset="0dip"
         android:verticalOffset="0dip"
+		android:maxAppIconNum="8"
+		android:iconSize="50"
         />
 
     <!-- Music transport control -->

@@ -33,7 +33,7 @@
 #include <binder/IServiceManager.h>
 #include <binder/MemoryHeapBase.h>
 #include <binder/PermissionCache.h>
-
+#include <surfaceflinger/ISurfaceClient.h>
 #include <utils/String8.h>
 #include <utils/String16.h>
 #include <utils/StopWatch.h>
@@ -64,6 +64,8 @@
 #ifndef AID_GRAPHICS
 #define AID_GRAPHICS 1003
 #endif
+
+#define EGL_VERSION_HW_ANDROID  0x3143
 
 #define DISPLAY_COUNT       1
 
@@ -247,14 +249,20 @@ status_t SurfaceFlinger::readyToRun()
     mServerCblk->connected |= 1<<dpy;
     display_cblk_t* dcblk = mServerCblk->displays + dpy;
     memset(dcblk, 0, sizeof(display_cblk_t));
-    dcblk->w            = plane.getWidth();
-    dcblk->h            = plane.getHeight();
+
+    dcblk->w            = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+    dcblk->h            = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+
     dcblk->format       = f;
     dcblk->orientation  = ISurfaceComposer::eOrientationDefault;
     dcblk->xdpi         = hw.getDpiX();
     dcblk->ydpi         = hw.getDpiY();
     dcblk->fps          = hw.getRefreshRate();
     dcblk->density      = hw.getDensity();
+
+    mDispWidth = dcblk->w;
+    mDispHeight = dcblk->h;
+    mSetDispSize = 0;
 
     // Initialize OpenGL|ES
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
@@ -435,6 +443,12 @@ bool SurfaceFlinger::threadLoop()
         // inform the h/w that we're done compositing
         logger.log(GraphicLog::SF_COMPOSITION_COMPLETE, index);
         hw.compositionComplete();
+
+        if (UNLIKELY(mSetDispSize == 1))
+        {
+            hw.setDispProp(DISPLAY_CMD_SETORIENTATION,mCurrentState.orientation,0,0);
+            mSetDispSize = 0;
+        }
 
         logger.log(GraphicLog::SF_SWAP_BUFFERS, index);
         postFramebuffer();
@@ -708,6 +722,14 @@ void SurfaceFlinger::computeVisibleRegions(
 
 void SurfaceFlinger::commitTransaction()
 {
+    if (!mLayersPendingRemoval.isEmpty()) {
+        // Notify removed layers now that they can't be drawn from
+        for (size_t i = 0; i < mLayersPendingRemoval.size(); i++) {
+            mLayersPendingRemoval[i]->onRemoved();
+        }
+        mLayersPendingRemoval.clear();
+    }
+
     mDrawingState = mCurrentState;
     mTransationPending = false;
     mTransactionCV.broadcast();
@@ -750,6 +772,51 @@ void SurfaceFlinger::handlePageFlip()
 void SurfaceFlinger::invalidateHwcGeometry()
 {
     mHwWorkListDirty = true;
+}
+
+int SurfaceFlinger::setDisplayParameter(uint32_t cmd,uint32_t  value)
+{
+    HWComposer& hwc(graphicPlane(0).displayHardware().getHwComposer());
+    if (hwc.initCheck() == NO_ERROR) 
+    {
+        if(cmd == HWC_LAYER_SETINITPARA)
+        {
+            const DisplayHardware& hw(graphicPlane(0).displayHardware());
+            screen_para_t screen_para;
+            
+            screen_para.app_width[0] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+            screen_para.app_height[0] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+            screen_para.width[0] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_WIDTH,0);
+            screen_para.height[0] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_HEIGHT,0);
+            screen_para.valid_width[0] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_VALID_WIDTH,0);
+            screen_para.valid_height[0] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_VALID_HEIGHT,0);
+            
+            screen_para.app_width[1] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,1,DISPLAY_APP_WIDTH,0);
+            screen_para.app_height[1] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,1,DISPLAY_APP_HEIGHT,0);
+            screen_para.width[1] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,1,DISPLAY_OUTPUT_WIDTH,0);
+            screen_para.height[1] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,1,DISPLAY_OUTPUT_HEIGHT,0);
+            screen_para.valid_width[1] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,1,DISPLAY_VALID_WIDTH,0);
+            screen_para.valid_height[1] = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,1,DISPLAY_VALID_HEIGHT,0);
+
+            hwc.setParameter(HWC_LAYER_SET_SCREEN_PARA,(unsigned int)&screen_para);
+            repaintEverything();
+        }
+    
+        return hwc.setParameter(cmd,value);
+    }
+
+    return NO_ERROR;
+}
+
+uint32_t SurfaceFlinger::getDisplayParameter(uint32_t cmd)
+{
+    HWComposer& hwc(graphicPlane(0).displayHardware().getHwComposer());
+    if (hwc.initCheck() == NO_ERROR) 
+    {
+        return hwc.getParameter(cmd);
+    }
+
+    return NO_ERROR;
 }
 
 bool SurfaceFlinger::lockPageFlip(const LayerVector& currentLayers)
@@ -941,7 +1008,15 @@ void SurfaceFlinger::setupHardwareComposer(Region& dirtyInOut)
             while (it != end) {
                 const Rect& r(*it++);
                 const GLint sy = height - (r.top + r.height());
-                glScissor(r.left, sy, r.width(), r.height());
+                
+                if(hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU)
+                {
+                    glScissor(0, 0, 1920, 1080);
+                }
+                else
+                {
+                    glScissor(r.left, sy, r.width(), r.height());
+                }
                 glClear(GL_COLOR_BUFFER_BIT);
             }
         }
@@ -967,12 +1042,18 @@ void SurfaceFlinger::composeSurfaces(const Region& dirty)
     const Vector< sp<LayerBase> >& layers(mVisibleLayersSortedByZ);
     size_t count = layers.size();
     for (size_t i=0 ; i<count ; i++) {
-        if (cur && (cur[i].compositionType != HWC_FRAMEBUFFER)) {
-            continue;
-        }
+        //if (cur && (cur[i].compositionType != HWC_FRAMEBUFFER)) {
+         //   continue;
+       // }
         const sp<LayerBase>& layer(layers[i]);
         const Region clip(dirty.intersect(layer->visibleRegionScreen));
         if (!clip.isEmpty()) {
+            if(hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU)
+            {
+                mDispWidth = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_VALID_WIDTH,0);
+                mDispHeight = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_VALID_HEIGHT,0);
+                layer->setDispSize(mDispWidth,mDispHeight);
+            }
             layer->draw(clip);
         }
     }
@@ -1030,7 +1111,7 @@ void SurfaceFlinger::debugFlashRegions()
 }
 
 void SurfaceFlinger::drawWormhole() const
-{
+{    
     const Region region(mWormholeRegion.intersect(mDirtyRegion));
     if (region.isEmpty())
         return;
@@ -1046,7 +1127,14 @@ void SurfaceFlinger::drawWormhole() const
         while (it != end) {
             const Rect& r = *it++;
             const GLint sy = height - (r.top + r.height());
-            glScissor(r.left, sy, r.width(), r.height());
+            if(hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU)
+            {
+                glScissor(0, 0, 1920, 1080);
+            }
+            else
+            {
+                glScissor(r.left, sy, r.width(), r.height());
+            }
             glClear(GL_COLOR_BUFFER_BIT);
         }
     } else {
@@ -1073,7 +1161,14 @@ void SurfaceFlinger::drawWormhole() const
         while (it != end) {
             const Rect& r = *it++;
             const GLint sy = height - (r.top + r.height());
-            glScissor(r.left, sy, r.width(), r.height());
+            if(hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU)
+            {
+                glScissor(0, 0, 1920, 1080);
+            }
+            else
+            {
+                glScissor(r.left, sy, r.width(), r.height());
+            }
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
         }
         glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -1160,7 +1255,7 @@ status_t SurfaceFlinger::purgatorizeLayer_l(const sp<LayerBase>& layerBase)
         mLayerPurgatory.add(layerBase);
     }
 
-    layerBase->onRemoved();
+    mLayersPendingRemoval.push(layerBase);
 
     // it's possible that we don't find a layer, because it might
     // have been destroyed already -- this is not technically an error
@@ -1238,6 +1333,12 @@ void SurfaceFlinger::setTransactionState(const Vector<ComposerState>& state,
             }
         }
     }
+
+    const DisplayHardware& hw(graphicPlane(0).displayHardware());
+    if ((hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU) && (orientation != 4 ))
+    {
+        mSetDispSize = 1;
+    }
 }
 
 int SurfaceFlinger::setOrientation(DisplayID dpy,
@@ -1258,6 +1359,65 @@ int SurfaceFlinger::setOrientation(DisplayID dpy,
         }
     }
     return orientation;
+}
+
+int SurfaceFlinger::setDisplayProp(int cmd,int param0,int param1,int param2)
+{
+    int ret = 0;
+    const DisplayHardware& hw(graphicPlane(0).displayHardware());
+    ret = hw.setDispProp(cmd,param0,param1,param2);
+             HWComposer& hwc(graphicPlane(0).displayHardware().getHwComposer());
+
+    if(cmd == DISPLAY_CMD_SETDISPMODE)
+    {
+        if(ret >= 0)
+        {
+             int hwc_mode = 0;
+             
+             if((param0 == DISPLAY_MODE_SINGLE) || (param0 == DISPLAY_MODE_SINGLE_VAR_FE) || (param0 == DISPLAY_MODE_SINGLE_FB_VAR))
+             {
+                 hwc_mode = HWC_MODE_SCREEN0;
+                 
+             }
+             else if(param0 == DISPLAY_MODE_DUALSAME)
+             {
+                 hwc_mode = HWC_MODE_SCREEN0_TO_SCREEN1;
+             }
+             else if(param0 == DISPLAY_MODE_DUALSAME_TWO_VIDEO)
+             {
+                 hwc_mode = HWC_MODE_SCREEN0_AND_SCREEN1;
+             }
+             else if(param0 == DISPLAY_MODE_SINGLE_VAR_BE)
+             {
+                hwc_mode = HWC_MODE_SCREEN0_BE;
+             }
+             else if(param0 == DISPLAY_MODE_SINGLE_VAR_GPU)
+             {
+                hwc_mode = HWC_MODE_SCREEN0_GPU;
+             }
+             else if(param0 == DISPLAY_MODE_SINGLE_VAR_FE)
+             {
+                hwc_mode = HWC_MODE_SCREEN0_FE_VAR;
+             } 
+             
+             hwc.setParameter(HWC_LAYER_SETMODE,hwc_mode);
+             repaintEverything();
+             //signalEvent();
+         }
+         else
+         {
+            return 0;
+         }
+    }
+
+    return ret;
+}
+
+int SurfaceFlinger::getDisplayProp(int cmd,int param0,int param1)
+{
+    const DisplayHardware& hw(graphicPlane(0).displayHardware());
+
+    return hw.getDispProp(cmd,param0,param1);
 }
 
 sp<ISurface> SurfaceFlinger::createSurface(
@@ -1527,7 +1687,7 @@ status_t SurfaceFlinger::dump(int fd, const Vector<String16>& args)
          * Dump the layers in the purgatory
          */
 
-        const size_t purgatorySize =  mLayerPurgatory.size();
+        const size_t purgatorySize = mLayerPurgatory.size();
         snprintf(buffer, SIZE, "Purgatory state (%d entries)\n", purgatorySize);
         result.append(buffer);
         for (size_t i=0 ; i<purgatorySize ; i++) {
@@ -1548,6 +1708,12 @@ status_t SurfaceFlinger::dump(int fd, const Vector<String16>& args)
                 extensions.getRenderer(),
                 extensions.getVersion());
         result.append(buffer);
+
+        snprintf(buffer, SIZE, "EGL : %s\n",
+                eglQueryString(graphicPlane(0).getEGLDisplay(),
+                        EGL_VERSION_HW_ANDROID));
+        result.append(buffer);
+
         snprintf(buffer, SIZE, "EXTS: %s\n", extensions.getExtension());
         result.append(buffer);
 
@@ -2421,6 +2587,76 @@ sp<Layer> SurfaceFlinger::getLayer(const sp<ISurface>& sur) const
     return result;
 }
 
+void SurfaceFlinger::registerClient(const sp<ISurfaceClient>& client)
+{
+    Mutex::Autolock _l(mClientLock);
+
+    int pid = IPCThreadState::self()->getCallingPid();
+    if (mNotificationClients.indexOfKey(pid) < 0) {
+        sp<NotificationClient> notificationClient = new NotificationClient(this,
+                                                                            client,
+                                                                            pid);
+        LOGV("registerClient() client %p, pid %d", notificationClient.get(), pid);
+
+        mNotificationClients.add(pid, notificationClient);
+
+        sp<IBinder> binder = client->asBinder();
+        binder->linkToDeath(notificationClient);
+    }
+}
+
+void SurfaceFlinger::removeNotificationClient(pid_t pid)
+{
+    Mutex::Autolock _l(mClientLock);
+
+    int index = mNotificationClients.indexOfKey(pid);
+    if (index >= 0) 
+    {
+        sp <NotificationClient> client = mNotificationClients.valueFor(pid);
+        LOGV("removeNotificationClient() %p, pid %d", client.get(), pid);
+        mNotificationClients.removeItem(pid);
+    }
+}
+
+// audioConfigChanged_l() must be called with AudioFlinger::mLock held
+void SurfaceFlinger::NotifyFramebufferChanged_l(int event, int displayno)
+{
+    size_t size = mNotificationClients.size();
+    for (size_t i = 0; i < size; i++) 
+    {
+        mNotificationClients.valueAt(i)->client()->notifyCallback(event, displayno, 0,0,0);
+    }
+}
+
+void  SurfaceFlinger::NotifyFBConverted_l(unsigned int addr1,unsigned int addr2,int bufid,int64_t proctime)
+{
+	size_t size = mNotificationClients.size();
+    for (size_t i = 0; i < size; i++) 
+    {
+        mNotificationClients.valueAt(i)->client()->notifyCallback(SURFACECLIENT_MSG_CONVERTFB, addr1, addr2,bufid,proctime);
+    }
+}
+
+SurfaceFlinger::NotificationClient::NotificationClient(const sp<SurfaceFlinger>& surfaceflinger,
+                                                     const sp<ISurfaceClient>& client,
+                                                     pid_t pid)
+    : mSurfaceFlinger(surfaceflinger), mPid(pid), mClient(client)
+{
+}
+
+SurfaceFlinger::NotificationClient::~NotificationClient()
+{
+    mClient.clear();
+}
+
+void SurfaceFlinger::NotificationClient::binderDied(const wp<IBinder>& who)
+{
+    LOGD("SurfaceFlinger::NotificationClient::binderDied, pid %d", mPid);
+    sp<NotificationClient> keep(this);
+    {
+        mSurfaceFlinger->removeNotificationClient(mPid);
+    }
+}
 // ---------------------------------------------------------------------------
 
 Client::Client(const sp<SurfaceFlinger>& flinger)
@@ -2671,6 +2907,9 @@ status_t GraphicPlane::setOrientation(int orientation)
 
     mOrientation = orientation;
     mGlobalTransform = mDisplayTransform * orientationTransform;
+
+    //hw.setDispProp(DISPLAY_CMD_SETORIENTATION,mOrientation,0,0);
+        
     return NO_ERROR;
 }
 

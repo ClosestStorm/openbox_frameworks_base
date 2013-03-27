@@ -2,6 +2,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 include frameworks/base/media/libstagefright/codecs/common/Config.mk
+include frameworks/base/media/CedarX-Projects/Config.mk
 
 LOCAL_SRC_FILES:=                         \
         ACodec.cpp                        \
@@ -9,7 +10,6 @@ LOCAL_SRC_FILES:=                         \
         AACWriter.cpp                     \
         AMRExtractor.cpp                  \
         AMRWriter.cpp                     \
-        AVIExtractor.cpp                  \
         AudioPlayer.cpp                   \
         AudioSource.cpp                   \
         AwesomePlayer.cpp                 \
@@ -86,9 +86,15 @@ LOCAL_STATIC_LIBRARIES := \
         libstagefright_timedtext \
         libvpx \
         libstagefright_mpeg2ts \
-        libstagefright_httplive \
         libstagefright_id3 \
         libFLAC \
+
+ifeq ($(CEDARX_DEBUG_FRAMEWORK),Y)
+LOCAL_STATIC_LIBRARIES += libstagefright_httplive_opt
+else
+LOCAL_LDFLAGS += \
+	$(CEDARX_TOP)/../CedarAndroidLib/LIB_ICS_$(CEDARX_CHIP_VERSION)/libstagefright_httplive_opt.a
+endif
 
 ################################################################################
 

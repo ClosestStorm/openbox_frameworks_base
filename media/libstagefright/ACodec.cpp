@@ -36,7 +36,16 @@
 
 #include <OMX_Component.h>
 
+#include <ui/android_native_buffer.h>
+#include <ui/GraphicBufferMapper.h>
+#include <gui/ISurfaceTexture.h>
+
 namespace android {
+
+static int ALIGN(int x, int y) {
+    // y must be a power of 2.
+    return (x + y - 1) & ~(y - 1);
+}
 
 template<class T>
 static void InitOMXParams(T *params) {
@@ -342,6 +351,7 @@ void ACodec::initiateSetup(const sp<AMessage> &msg) {
 }
 
 void ACodec::signalFlush() {
+    LOGV("[%s] signalFlush", mComponentName.c_str());
     (new AMessage(kWhatFlush, id()))->post();
 }
 
@@ -765,10 +775,11 @@ void ACodec::configureCodec(
         // These are PCM-like formats with a fixed sample rate but
         // a variable number of channels.
 
-        int32_t numChannels;
+        int32_t numChannels, sampleRate;
         CHECK(msg->findInt32("channel-count", &numChannels));
+        CHECK(msg->findInt32("sample-rate", &sampleRate));
 
-        CHECK_EQ(setupG711Decoder(numChannels), (status_t)OK);
+        CHECK_EQ(setupG711Decoder(numChannels, sampleRate), (status_t)OK);
     }
 
     int32_t maxInputSize;
@@ -860,9 +871,10 @@ status_t ACodec::setupAMRDecoder(bool isWAMR) {
     return mOMX->setParameter(mNode, OMX_IndexParamAudioAmr, &def, sizeof(def));
 }
 
-status_t ACodec::setupG711Decoder(int32_t numChannels) {
+status_t ACodec::setupG711Decoder(int32_t numChannels,int32_t sampleRate) {
     return setupRawAudioFormat(
-            kPortIndexInput, 8000 /* sampleRate */, numChannels);
+            //kPortIndexInput, 8000 /* sampleRate */, numChannels);
+            kPortIndexInput,  sampleRate , numChannels);
 }
 
 status_t ACodec::setupRawAudioFormat(
@@ -1090,6 +1102,20 @@ status_t ACodec::initNativeWindow() {
 
     mOMX->enableGraphicBuffers(mNode, kPortIndexOutput, OMX_FALSE);
     return OK;
+}
+
+size_t ACodec::countBuffersOwnedByComponent(OMX_U32 portIndex) const {
+    size_t n = 0;
+
+    for (size_t i = 0; i < mBuffers[portIndex].size(); ++i) {
+        const BufferInfo &info = mBuffers[portIndex].itemAt(i);
+
+        if (info.mStatus == BufferInfo::OWNED_BY_COMPONENT) {
+            ++n;
+        }
+    }
+
+    return n;
 }
 
 bool ACodec::allYourBuffersAreBelongToUs(
@@ -1658,6 +1684,8 @@ void ACodec::BaseState::onOutputBufferDrained(const sp<AMessage> &msg) {
         mCodec->findBufferByID(kPortIndexOutput, bufferID, &index);
     CHECK_EQ((int)info->mStatus, (int)BufferInfo::OWNED_BY_DOWNSTREAM);
 
+    LOGV("onOutputBufferDrained mNativeWindowSoft!=NULL?%d",mCodec->mNativeWindowSoft!=NULL);
+
     int32_t render;
     if (mCodec->mNativeWindow != NULL
             && msg->findInt32("render", &render) && render != 0) {
@@ -1671,7 +1699,44 @@ void ACodec::BaseState::onOutputBufferDrained(const sp<AMessage> &msg) {
             mCodec->signalError();
             info->mStatus = BufferInfo::OWNED_BY_US;
         }
-    } else {
+    }
+    else if (mCodec->mNativeWindowSoft != NULL
+                && msg->findInt32("render", &render) && render != 0)  {
+        ANativeWindowBuffer *buf;
+        int err;
+        if ((err = mCodec->mNativeWindowSoft->dequeueBuffer(mCodec->mNativeWindowSoft.get(), &buf)) != 0) {
+            LOGW("Surface::dequeueBuffer returned error %d", err);
+            return;
+        }
+
+        CHECK_EQ(0, mCodec->mNativeWindowSoft->lockBuffer(mCodec->mNativeWindowSoft.get(), buf));
+
+        GraphicBufferMapper &mapper = GraphicBufferMapper::get();
+
+        Rect bounds(mCodec->mVideoWidth, mCodec->mVideoHeight);
+
+        void *dst;
+        CHECK_EQ(0, mapper.lock(
+                    buf->handle, GRALLOC_USAGE_SW_WRITE_OFTEN, bounds, &dst));
+
+        //LOGV("mColorFormat: %d", mColorFormat);
+        size_t dst_y_size = buf->stride * buf->height;
+        size_t dst_c_stride = ALIGN(buf->stride / 2, 16);
+        size_t dst_c_size = dst_c_stride * buf->height / 2;
+
+        memcpy(dst, info->mData->data(), dst_y_size + dst_c_size*2);
+        LOGV("soft render buffer...%dX%d",mCodec->mVideoWidth,mCodec->mVideoHeight);
+
+        CHECK_EQ(0, mapper.unlock(buf->handle));
+
+        if ((err = mCodec->mNativeWindowSoft->queueBuffer(mCodec->mNativeWindowSoft.get(), buf)) != 0) {
+            LOGW("Surface::queueBuffer returned error %d", err);
+        }
+        buf = NULL;
+
+        info->mStatus = BufferInfo::OWNED_BY_US;
+    }
+    else {
         info->mStatus = BufferInfo::OWNED_BY_US;
     }
 
@@ -1833,12 +1898,49 @@ void ACodec::UninitializedState::onSetup(
 
     sp<RefBase> obj;
     if (msg->findObject("native-window", &obj)
-            && strncmp("OMX.google.", componentName.c_str(), 11)) {
+            && (strncmp("OMX.google.", componentName.c_str(), 11) || !strncmp("OMX.google.h264", componentName.c_str(), 15))) {
         sp<NativeWindowWrapper> nativeWindow(
                 static_cast<NativeWindowWrapper *>(obj.get()));
         CHECK(nativeWindow != NULL);
         mCodec->mNativeWindow = nativeWindow->getNativeWindow();
     }
+    else if (msg->findObject("native-window", &obj)
+			&& mCodec->mNativeWindow == NULL) {
+		sp<NativeWindowWrapper> nativeWindow(
+				static_cast<NativeWindowWrapper *>(obj.get()));
+		CHECK(nativeWindow != NULL);
+
+		mCodec->mNativeWindowSoft = nativeWindow->getNativeWindow();
+		LOGV("setup software native window");
+
+		if (!strncasecmp(mime.c_str(), "video/", 6)) {
+			int32_t width, height;
+			CHECK(msg->findInt32("width", &width));
+			CHECK(msg->findInt32("height", &height));
+			
+			height = ((height + 7)>>3)<<3;
+			mCodec->mVideoWidth = width;
+			mCodec->mVideoHeight = height;
+
+		    CHECK_EQ(0,
+		            native_window_set_usage(
+		            mCodec->mNativeWindowSoft.get(),
+		            GRALLOC_USAGE_SW_READ_NEVER | GRALLOC_USAGE_SW_WRITE_OFTEN
+		            | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP));
+
+		    CHECK_EQ(0,
+		            native_window_set_scaling_mode(
+		            mCodec->mNativeWindowSoft.get(),
+		            NATIVE_WINDOW_SCALING_MODE_SCALE_TO_WINDOW));
+
+		    // Width must be multiple of 32???
+		    CHECK_EQ(0, native_window_set_buffers_geometry(
+		    			mCodec->mNativeWindowSoft.get(),
+		                width,
+		                height,
+		                HAL_PIXEL_FORMAT_YV12));
+		}
+	}
 
     CHECK_EQ((status_t)OK, mCodec->initNativeWindow());
 
@@ -2041,6 +2143,14 @@ bool ACodec::ExecutingState::onMessageReceived(const sp<AMessage> &msg) {
 
         case kWhatFlush:
         {
+            LOGV("[%s] ExecutingState flushing now "
+                 "(codec owns %d/%d input, %d/%d output).",
+                    mCodec->mComponentName.c_str(),
+                    mCodec->countBuffersOwnedByComponent(kPortIndexInput),
+                    mCodec->mBuffers[kPortIndexInput].size(),
+                    mCodec->countBuffersOwnedByComponent(kPortIndexOutput),
+                    mCodec->mBuffers[kPortIndexOutput].size());
+
             mActive = false;
 
             CHECK_EQ(mCodec->mOMX->sendCommand(
@@ -2180,6 +2290,12 @@ bool ACodec::OutputPortSettingsChangedState::onOMXEvent(
                          err);
 
                     mCodec->signalError();
+
+                    // This is technically not correct, since we were unable
+                    // to allocate output buffers and therefore the output port
+                    // remains disabled. It is necessary however to allow us
+                    // to shutdown the codec properly.
+                    mCodec->changeState(mCodec->mExecutingState);
                 }
 
                 return true;
@@ -2351,6 +2467,7 @@ bool ACodec::IdleToLoadedState::onOMXEvent(
             CHECK_EQ(mCodec->mOMX->freeNode(mCodec->mNode), (status_t)OK);
 
             mCodec->mNativeWindow.clear();
+            mCodec->mNativeWindowSoft.clear();
             mCodec->mNode = NULL;
             mCodec->mOMX.clear();
             mCodec->mComponentName.clear();
@@ -2408,6 +2525,9 @@ bool ACodec::FlushingState::onMessageReceived(const sp<AMessage> &msg) {
 
 bool ACodec::FlushingState::onOMXEvent(
         OMX_EVENTTYPE event, OMX_U32 data1, OMX_U32 data2) {
+    LOGV("[%s] FlushingState onOMXEvent(%d,%ld)",
+            mCodec->mComponentName.c_str(), event, data1);
+
     switch (event) {
         case OMX_EventCmdComplete:
         {

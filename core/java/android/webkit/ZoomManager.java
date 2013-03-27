@@ -493,11 +493,19 @@ class ZoomManager {
 
         if (mHardwareAccelerated) {
             mWebView.updateScrollCoordinates(mWebView.getScrollX() - tx, mWebView.getScrollY() - ty);
+            // By adding webView matrix, we need to offset the canvas a bit
+            // to make the animation smooth.
+            canvas.translate(tx, ty);
             setZoomScale(zoomScale, false);
 
             if (mZoomScale == 0) {
                 // We've reached the end of the zoom animation.
                 mInHWAcceleratedZoom = false;
+
+                // Ensure that the zoom level is pushed to WebCore. This has not
+                // yet occurred because we prevent it from happening while
+                // mInHWAcceleratedZoom is true.
+                mWebView.sendViewSizeZoom(false);
             }
         } else {
             canvas.translate(tx, ty);
@@ -514,11 +522,12 @@ class ZoomManager {
     }
 
     public void updateDoubleTapZoom(int doubleTapZoom) {
-        if (mInZoomOverview) {
-            mDoubleTapZoomFactor = doubleTapZoom / 100.0f;
-            mTextWrapScale = getReadingLevelScale();
-            refreshZoomScale(true);
-        }
+        boolean zoomIn = (mTextWrapScale - mActualScale) < .1f;
+        mDoubleTapZoomFactor = doubleTapZoom / 100.0f;
+        mTextWrapScale = getReadingLevelScale();
+        float newScale = zoomIn ? mTextWrapScale
+                : Math.min(mTextWrapScale, mActualScale);
+        setZoomScale(newScale, true, true);
     }
 
     public void refreshZoomScale(boolean reflowText) {

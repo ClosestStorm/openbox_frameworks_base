@@ -31,7 +31,7 @@
 #include <ui/Region.h>
 
 #include <surfaceflinger/Surface.h>
-
+#include <surfaceflinger/ISurfaceClient.h>
 namespace android {
 
 // ---------------------------------------------------------------------------
@@ -119,6 +119,10 @@ public:
         
     //! Resume updates on the specified display.
     static status_t unfreezeDisplay(DisplayID dpy, uint32_t flags = 0);
+
+    static int  setDisplayProp(int cmd,int param0,int param1,int param2);
+    static int  getDisplayProp(int cmd,int param0,int param1);
+	static void		registerSurfaceClient(const sp<ISurfaceClient>& client);
 
     //! Set the orientation of the given display
     static int setOrientation(DisplayID dpy, int orientation, uint32_t flags);

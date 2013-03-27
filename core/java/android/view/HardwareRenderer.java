@@ -219,6 +219,13 @@ public abstract class HardwareRenderer {
     abstract int getHeight();
 
     /**
+     * Gets the current canvas associated with this HardwareRenderer.
+     *
+     * @return the current HardwareCanvas
+     */
+    abstract HardwareCanvas getCanvas();
+
+    /**
      * Sets the directory to use as a persistent storage for hardware rendering
      * resources.
      * 
@@ -783,6 +790,11 @@ public abstract class HardwareRenderer {
             return mHeight;
         }
 
+        @Override
+        HardwareCanvas getCanvas() {
+            return mCanvas;
+        }
+
         boolean canDraw() {
             return mGl != null && mCanvas != null;
         }        
@@ -799,6 +811,8 @@ public abstract class HardwareRenderer {
             if (canDraw()) {
                 if (!hasDirtyRegions()) {
                     dirty = null;
+                } else if (dirty != null) {
+                    dirty.intersect(0, 0, mWidth, mHeight);
                 }
                 attachInfo.mIgnoreDirtyState = true;
                 attachInfo.mDrawingTime = SystemClock.uptimeMillis();

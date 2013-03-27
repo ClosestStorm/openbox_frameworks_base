@@ -26,6 +26,7 @@ import android.os.Handler;
 import android.os.RemoteException;
 import android.os.WorkSource;
 import android.os.Messenger;
+import android.os.SystemProperties;
 
 import com.android.internal.util.AsyncChannel;
 
@@ -866,7 +867,16 @@ public class WifiManager {
      * @see #getWifiState()
      */
     public boolean isWifiEnabled() {
-        return getWifiState() == WIFI_STATE_ENABLED;
+		if( getWifiState() == WIFI_STATE_ENABLED) {
+			return true;
+		} else if (getWifiApState() == WIFI_AP_STATE_ENABLED) {
+			return true;
+		} else if ( (getWifiState() == WIFI_STATE_DISABLED)
+			&& (!SystemProperties.get("init.svc.wpa_supplicant").equals("stopped")) ){
+			return true;
+		} else {
+			return false;
+		}
     }
 
     /**

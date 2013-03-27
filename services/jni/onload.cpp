@@ -33,6 +33,9 @@ int register_android_server_VibratorService(JNIEnv* env);
 int register_android_server_SystemServer(JNIEnv* env);
 int register_android_server_location_GpsLocationProvider(JNIEnv* env);
 int register_android_server_connectivity_Vpn(JNIEnv* env);
+int register_android_server_DisplayManagerService(JNIEnv *env);
+int register_android_server_NativeDispather(JNIEnv* env);
+
 };
 
 using namespace android;
@@ -61,6 +64,8 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved)
     register_android_server_SystemServer(env);
     register_android_server_location_GpsLocationProvider(env);
     register_android_server_connectivity_Vpn(env);
+	register_android_server_DisplayManagerService(env);
+	register_android_server_NativeDispather(env);
 
     return JNI_VERSION_1_4;
 }

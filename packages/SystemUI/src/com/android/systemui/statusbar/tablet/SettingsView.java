@@ -39,9 +39,9 @@ import com.android.systemui.statusbar.policy.VolumeController;
 public class SettingsView extends LinearLayout implements View.OnClickListener {
     static final String TAG = "SettingsView";
 
-    AirplaneModeController mAirplane;
-    AutoRotateController mRotate;
-    BrightnessController mBrightness;
+//    AirplaneModeController mAirplane;
+//    AutoRotateController mRotate;
+//    BrightnessController mBrightness;
     DoNotDisturbController mDoNotDisturb;
 
     public SettingsView(Context context, AttributeSet attrs) {
@@ -58,13 +58,13 @@ public class SettingsView extends LinearLayout implements View.OnClickListener {
 
         final Context context = getContext();
 
-        mAirplane = new AirplaneModeController(context,
-                (CompoundButton)findViewById(R.id.airplane_checkbox));
+//        mAirplane = new AirplaneModeController(context,
+//                (CompoundButton)findViewById(R.id.airplane_checkbox));
         findViewById(R.id.network).setOnClickListener(this);
-        mRotate = new AutoRotateController(context,
-                (CompoundButton)findViewById(R.id.rotate_checkbox));
-        mBrightness = new BrightnessController(context,
-                (ToggleSlider)findViewById(R.id.brightness));
+//        mRotate = new AutoRotateController(context,
+//                (CompoundButton)findViewById(R.id.rotate_checkbox));
+//        mBrightness = new BrightnessController(context,
+//                (ToggleSlider)findViewById(R.id.brightness));
         mDoNotDisturb = new DoNotDisturbController(context,
                 (CompoundButton)findViewById(R.id.do_not_disturb_checkbox));
         findViewById(R.id.settings).setOnClickListener(this);
@@ -73,7 +73,7 @@ public class SettingsView extends LinearLayout implements View.OnClickListener {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        mAirplane.release();
+//        mAirplane.release();
         mDoNotDisturb.release();
     }
 

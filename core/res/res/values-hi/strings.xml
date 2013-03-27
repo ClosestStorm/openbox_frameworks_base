@@ -137,6 +137,9 @@
     <string name="turn_off_radio" msgid="8198784949987062346">"वायरलेस बंद करें"</string>
     <string name="screen_lock" msgid="799094655496098153">"स्‍क्रीन लॉक"</string>
     <string name="power_off" msgid="4266614107412865048">"पावर बंद"</string>
+    <string name="silent_mode_silent" msgid="319298163018473078">"रिंगर बंद"</string>
+    <string name="silent_mode_vibrate" msgid="7072043388581551395">"रिंगर कंपन"</string>
+    <string name="silent_mode_ring" msgid="8592241816194074353">"रिंगर चालू"</string>
     <string name="shutdown_progress" msgid="2281079257329981203">"शट डाउन हो रहा है..."</string>
     <string name="shutdown_confirm" product="tablet" msgid="3385745179555731470">"आपकी टेबलेट शट डाउन हो जाएगी."</string>
     <string name="shutdown_confirm" product="default" msgid="649792175242821353">"आपका फ़ोन शट डाउन हो जाएगा."</string>
@@ -959,6 +962,9 @@
     <item quantity="one" msgid="1634101450343277345">"उपलब्‍ध Wi-Fi नेटवर्क खोलें"</item>
     <item quantity="other" msgid="7915895323644292768">"खुले Wi-Fi नेटवर्क उपलब्‍ध है"</item>
   </plurals>
+    <string name="wifi_available_sign_in" msgid="9157196203958866662">"Wi-Fi नेटवर्क में साइन इन करें"</string>
+    <!-- no translation found for wifi_available_sign_in_detailed (6797764740339907572) -->
+    <skip />
     <string name="wifi_watchdog_network_disabled" msgid="7904214231651546347">"Wi-Fi से कनेक्‍ट नहीं हो सका"</string>
     <string name="wifi_watchdog_network_disabled_detailed" msgid="4917472096696322767">" के पास एक कमज़ोर इंटरनेट कनेक्‍शन है."</string>
     <string name="wifi_p2p_dialog_title" msgid="97611782659324517">"Wi-Fi प्रत्यक्ष"</string>

@@ -121,8 +121,10 @@ class BluetoothEventLoop {
     }
 
     /*package*/ void getProfileProxy() {
-        mAdapter.getProfileProxy(mContext, mProfileServiceListener, BluetoothProfile.A2DP);
-        mAdapter.getProfileProxy(mContext, mProfileServiceListener, BluetoothProfile.INPUT_DEVICE);
+    	if(mAdapter != null) {
+	        mAdapter.getProfileProxy(mContext, mProfileServiceListener, BluetoothProfile.A2DP);
+	        mAdapter.getProfileProxy(mContext, mProfileServiceListener, BluetoothProfile.INPUT_DEVICE);
+    	}
     }
 
     private BluetoothProfile.ServiceListener mProfileServiceListener =

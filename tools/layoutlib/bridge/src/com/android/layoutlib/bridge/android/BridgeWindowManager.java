@@ -471,4 +471,49 @@ public class BridgeWindowManager implements IWindowManager {
     public boolean hasNavigationBar() {
         return false; // should this return something else?
     }
+
+	public void resetInputCalibration() 
+	{
+		
+	}
+
+	public void statusbarShow()
+	{
+	
+	}
+	
+    public void statusbarHide()
+    {
+    
+    }
+	
+    public void invokePerformWindow()
+    {
+    
+    }
+
+	public void keyEnterMouseMode(){
+		
+	}
+
+	public void keyExitMouseMode(){
+		
+	}
+
+	public void keySetMouseMoveCode(int left,int right,int top,int bottom){
+		
+	}
+
+	public void keySetMouseBtnCode(int leftbtn,int midbtn,int rightbtn){
+		
+	}
+
+	public void keySetMouseDistance(int distance){
+		
+	}
+
+    public void lockNow() {
+        // TODO Auto-generated method stub
+
+    }
 }

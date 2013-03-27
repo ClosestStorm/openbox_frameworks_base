@@ -79,7 +79,7 @@ import java.util.HashSet;
 public abstract class ViewGroup extends View implements ViewParent, ViewManager {
 
     private static final boolean DBG = false;
-    
+
     /**
      * Views which have been hidden or removed which need to be animated on
      * their way out.
@@ -2719,13 +2719,6 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
             return more;
         }
 
-        float alpha = child.getAlpha();
-        // Bail out early if the view does not need to be drawn
-        if (alpha <= ViewConfiguration.ALPHA_THRESHOLD && (child.mPrivateFlags & ALPHA_SET) == 0 &&
-                !(child instanceof SurfaceView)) {
-            return more;
-        }
-
         if (hardwareAccelerated) {
             // Clear INVALIDATED flag to allow invalidation to occur during rendering, but
             // retain the flag's value temporarily in the mRecreateDisplayList flag
@@ -2779,6 +2772,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
             }
         }
 
+        float alpha = child.getAlpha();
         if (transformToApply != null || alpha < 1.0f || !child.hasIdentityMatrix()) {
             if (transformToApply != null || !childHasIdentityMatrix) {
                 int transX = 0;
@@ -4182,15 +4176,43 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      * {@inheritDoc}
      */
     public boolean getChildVisibleRect(View child, Rect r, android.graphics.Point offset) {
+        // It doesn't make a whole lot of sense to call this on a view that isn't attached,
+        // but for some simple tests it can be useful. If we don't have attach info this
+        // will allocate memory.
+        final RectF rect = mAttachInfo != null ? mAttachInfo.mTmpTransformRect : new RectF();
+        rect.set(r);
+
+        if (!child.hasIdentityMatrix()) {
+           child.getMatrix().mapRect(rect);
+        }
+
         int dx = child.mLeft - mScrollX;
         int dy = child.mTop - mScrollY;
+
+        rect.offset(dx, dy);
+
         if (offset != null) {
+            if (!child.hasIdentityMatrix()) {
+                float[] position = mAttachInfo != null ? mAttachInfo.mTmpTransformLocation
+                        : new float[2];
+                position[0] = offset.x;
+                position[1] = offset.y;
+                child.getMatrix().mapPoints(position);
+                offset.x = (int) (position[0] + 0.5f);
+                offset.y = (int) (position[1] + 0.5f);
+            }
             offset.x += dx;
             offset.y += dy;
         }
-        r.offset(dx, dy);
-        return r.intersect(0, 0, mRight - mLeft, mBottom - mTop) &&
-               (mParent == null || mParent.getChildVisibleRect(this, r, offset));
+
+        if (rect.intersect(0, 0, mRight - mLeft, mBottom - mTop)) {
+            if (mParent == null) return true;
+            r.set((int) (rect.left + 0.5f), (int) (rect.top + 0.5f),
+                    (int) (rect.right + 0.5f), (int) (rect.bottom + 0.5f));
+            return mParent.getChildVisibleRect(this, r, offset);
+        }
+
+        return false;
     }
 
     /**

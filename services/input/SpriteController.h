@@ -25,6 +25,9 @@
 #include <surfaceflinger/ISurfaceComposer.h>
 
 #include <SkBitmap.h>
+#include <hardware/display.h>
+#include <hardware/hardware.h>
+
 
 namespace android {
 
@@ -145,7 +148,7 @@ public:
     SpriteController(const sp<Looper>& looper, int32_t overlayLayer);
 
     /* Creates a new sprite, initially invisible. */
-    sp<Sprite> createSprite();
+    sp<Sprite> createSprite(bool useHW);
 
     /* Opens or closes a transaction to perform a batch of sprite updates as part of
      * a single operation such as setPosition and setAlpha.  It is not necessary to
@@ -156,6 +159,8 @@ public:
     void closeTransaction();
 
 private:
+	bool				 mSupportHWSprite;
+	display_device_t*	 mDevice;
     enum {
         MSG_UPDATE_SPRITES,
         MSG_DISPOSE_SURFACES,
@@ -191,6 +196,7 @@ private:
         float positionY;
         int32_t layer;
         float alpha;
+		bool	usehw;
         SpriteTransformationMatrix transformationMatrix;
 
         sp<SurfaceControl> surfaceControl;
@@ -200,7 +206,14 @@ private:
         bool surfaceVisible;
 
         inline bool wantSurfaceVisible() const {
-            return visible && alpha > 0.0f && icon.isValid();
+			if(!usehw)
+			{
+            	return visible && alpha > 0.0f && icon.isValid();
+			}
+			else
+			{
+				return visible;
+			}
         }
     };
 
@@ -216,7 +229,7 @@ private:
         virtual ~SpriteImpl();
 
     public:
-        SpriteImpl(const sp<SpriteController> controller);
+        SpriteImpl(const sp<SpriteController> controller,bool useHW);
 
         virtual void setIcon(const SpriteIcon& icon);
         virtual void setVisible(bool visible);
@@ -244,6 +257,7 @@ private:
 
     private:
         sp<SpriteController> mController;
+		bool				 mUseHardware;	
 
         struct Locked {
             SpriteState state;
@@ -288,6 +302,7 @@ private:
 
     void ensureSurfaceComposerClient();
     sp<SurfaceControl> obtainSurface(int32_t width, int32_t height);
+	int	 getHWCursorPos(int inx,int iny,int *outx,int *outy);
 };
 
 } // namespace android

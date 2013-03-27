@@ -208,7 +208,7 @@ struct PointerCoords {
     status_t setAxisValue(int32_t axis, float value);
 
     void scale(float scale);
-
+	void scale(float scalex,float scaley);
     inline float getX() const {
         return getAxisValue(AMOTION_EVENT_AXIS_X);
     }
@@ -270,13 +270,15 @@ public:
     inline int32_t getSource() const { return mSource; }
 
     inline void setSource(int32_t source) { mSource = source; }
+    
+    int32_t mDeviceId;
+    int32_t mSource;
 
 protected:
     void initialize(int32_t deviceId, int32_t source);
     void initialize(const InputEvent& from);
 
-    int32_t mDeviceId;
-    int32_t mSource;
+    
 };
 
 /*
@@ -546,6 +548,7 @@ public:
     void offsetLocation(float xOffset, float yOffset);
 
     void scale(float scaleFactor);
+	void scale(float scalex, float scaley);
 
 #ifdef HAVE_ANDROID_OS
     void transform(const SkMatrix* matrix);
@@ -568,7 +571,7 @@ public:
             return mSamplePointerCoords.array();
     }
 
-protected:
+public:
     int32_t mAction;
     int32_t mFlags;
     int32_t mEdgeFlags;

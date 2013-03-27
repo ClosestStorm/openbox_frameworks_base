@@ -1414,7 +1414,8 @@ public class SyncStorageEngine extends Handler {
             XmlPullParser parser = Xml.newPullParser();
             parser.setInput(fis, null);
             int eventType = parser.getEventType();
-            while (eventType != XmlPullParser.START_TAG) {
+			int cycleCount = 0; 
+            while ((eventType != XmlPullParser.START_TAG)&&(++cycleCount<1000)) {
                 eventType = parser.next();
             }
             String tagName = parser.getName();

@@ -76,7 +76,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.AdapterView;
-
+import android.content.pm.ApplicationInfo;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -1364,6 +1364,31 @@ public class Activity extends ContextThemeWrapper
     protected void onDestroy() {
         mCalled = true;
 
+		if(false)
+		{
+			String  			pckname;
+			String              clsname = "com.aurorasoftworks.quadrant.ui.runner.BenchmarkExecutionActivity";
+    		String              substr = "com.aurorasoftworks.quadrant";
+	    	int					index;
+	    	
+	    	pckname = getPackageName();
+
+			index  = pckname.indexOf(substr);
+	        if(index >= 0)
+            {
+                clsname = mComponent.getClassName();
+
+				substr = "com.aurorasoftworks.quadrant.ui.runner.BenchmarkExecutionActivity";
+				
+				index  = clsname.indexOf(substr);
+            	if(index >= 0)
+            	{
+            		System.exit(0);
+            	}
+            }
+	    	
+	    	Log.d(TAG,"pckname = " + pckname + " mComponent = " + mComponent.getClassName());
+    	}
         // dismiss any dialogs we are managing.
         if (mManagedDialogs != null) {
             final int numDialogs = mManagedDialogs.size();
@@ -1392,6 +1417,8 @@ public class Activity extends ContextThemeWrapper
         if (mSearchManager != null) {
             mSearchManager.stopSearch();
         }
+
+		
 
         getApplication().dispatchActivityDestroyed(this);
     }

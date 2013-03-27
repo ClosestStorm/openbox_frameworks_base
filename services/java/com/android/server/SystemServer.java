@@ -43,6 +43,8 @@ import android.util.EventLog;
 import android.util.Log;
 import android.util.Slog;
 import android.view.WindowManager;
+import android.os.DynamicPManager;
+import android.media.AudioSystem;
 
 import com.android.internal.app.ShutdownThread;
 import com.android.internal.os.BinderInternal;
@@ -54,6 +56,8 @@ import com.android.server.net.NetworkStatsService;
 import com.android.server.pm.PackageManagerService;
 import com.android.server.usb.UsbService;
 import com.android.server.wm.WindowManagerService;
+import com.android.server.WifiDisplayManagerService;
+import com.android.server.googleremote.GoogleRemoteService;
 
 import dalvik.system.VMRuntime;
 import dalvik.system.Zygote;
@@ -61,11 +65,27 @@ import dalvik.system.Zygote;
 import java.io.File;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.ArrayList;
 
+
+/* add by Gary. start {{----------------------------------- */
+/* 2011-11-18 */
+/* init audio output channel */
+import android.view.DisplayManager;
+import android.media.AudioManager;
+import android.provider.Settings;
+import android.view.DispList;
+import com.android.internal.allwinner.config.ProductConfig;
+/* add by Gary. end   -----------------------------------}} */
 class ServerThread extends Thread {
     private static final String TAG = "SystemServer";
     private static final String ENCRYPTING_STATE = "trigger_restart_min_framework";
     private static final String ENCRYPTED_STATE = "1";
+    /* add by Gary. start {{----------------------------------- */
+    /* 2012-5-9 */
+    /* support the YPbPr */
+    private final boolean mDeviceHasYpbpr = false;
+    /* add by Gary. end   -----------------------------------}} */
 
     ContentResolver mContentResolver;
 
@@ -111,6 +131,7 @@ class ServerThread extends Thread {
 
         LightsService lights = null;
         PowerManagerService power = null;
+        DynamicPManagerService dpm = null;
         BatteryService battery = null;
         AlarmManagerService alarm = null;
         NetworkManagementService networkManagement = null;
@@ -119,6 +140,7 @@ class ServerThread extends Thread {
         ConnectivityService connectivity = null;
         WifiP2pService wifiP2p = null;
         WifiService wifi = null;
+        EthernetService ethernet = null;	/*  EthernetService (add by shuge@allwinnertech.com)  */
         IPackageManager pm = null;
         Context context = null;
         WindowManagerService wm = null;
@@ -196,6 +218,10 @@ class ServerThread extends Thread {
             battery = new BatteryService(context, lights);
             ServiceManager.addService("battery", battery);
 
+			Slog.i(TAG, "DynamicPManager");
+			dpm = new DynamicPManagerService(context);
+			ServiceManager.addService(DynamicPManager.DPM_SERVICE, dpm);
+
             Slog.i(TAG, "Vibrator Service");
             ServiceManager.addService("vibrator", new VibratorService(context));
 
@@ -216,6 +242,19 @@ class ServerThread extends Thread {
                     factoryTest != SystemServer.FACTORY_TEST_LOW_LEVEL,
                     !firstBoot);
             ServiceManager.addService(Context.WINDOW_SERVICE, wm);
+
+			if(SystemProperties.get("ro.display.switch").equals("1"))
+			{
+				Slog.i(TAG, "Display Manager");
+				DisplayManagerService display = new DisplayManagerService(context,power);
+	            ServiceManager.addService(Context.DISPLAY_SERVICE, display);
+			}
+			if(true) //SystemProperties.get("ro.wifidisplay.switch").equals("1")
+			{
+				Slog.i(TAG, "Display Manager");
+				WifiDisplayManagerService wifidisplay = new WifiDisplayManagerService(context,power);
+	            ServiceManager.addService(Context.WIFIDISPLAY_SERVICE, wifidisplay);
+			}
 
             ActivityManagerService.self().setWindowManager(wm);
 
@@ -374,6 +413,16 @@ class ServerThread extends Thread {
                 reportWtf("starting Wi-Fi Service", e);
             }
 
+		   /* Begin (add by shuge@allwinnertech.com) */
+           try {
+                Slog.i(TAG, "Ethernet Service");
+                ethernet = new EthernetService(context);
+                ServiceManager.addService(Context.ETHERNET_SERVICE, ethernet);
+            } catch (Throwable e) {
+                reportWtf("starting Ethernet Service", e);
+            }
+		   /* End (add by shuge@allwinnertech.com) */
+
             try {
                 Slog.i(TAG, "Connectivity Service");
                 connectivity = new ConnectivityService(
@@ -486,6 +535,14 @@ class ServerThread extends Thread {
             } catch (Throwable e) {
                 reportWtf("starting WiredAccessoryObserver", e);
             }
+
+			try {
+				Slog.i(TAG, "Audio device manager Observer");
+				// Listen for wired headset changes
+				new AudioDeviceManagerObserver(context);
+			} catch (Throwable e) {
+				reportWtf("starting AudioDeviceManagerObserver", e);
+			}
 
             try {
                 Slog.i(TAG, "USB Service");
@@ -736,10 +793,292 @@ class ServerThread extends Thread {
             }
         });
 
+        /* add by Gary. start {{----------------------------------- */
+        /* 2012-05-30 */
+        /* modify for a10s */
+        String chipType = SystemProperties.get(ProductConfig.CHIP_TYPE);
+        if(chipType == null){
+            Log.w(TAG, "Fail in getting the value of property " + ProductConfig.CHIP_TYPE);
+            chipType = ProductConfig.CHIP_TYPE_DEFAULT;
+        }
+        Log.d(TAG, "property " + ProductConfig.CHIP_TYPE + " is " + chipType);
+        if(chipType.equals(ProductConfig.CHIP_TYPE_A10S)){
+            DisplayManager displayManager = new DisplayManager();
+            if(displayManager == null)
+                Log.w(TAG, "Fail in creating DisplayManager.");
+            DispList.DispFormat savedFormat = null;
+            String savedFormatName = Settings.System.getString(context.getContentResolver(), Settings.System.DISPLY_OUTPUT_FORMAT);
+            if(savedFormatName == null){
+                Log.w(TAG, "Fail in getting saved display format.");
+                savedFormat = DispList.HDMI_DEFAULT_FORMAT;
+            }else{
+                savedFormat = DispList.ItemName2Code(savedFormatName);
+            }
+            Log.d(TAG, "saved display = " + DispList.ItemCode2Name(savedFormat));
+            DispList.DispFormat finalFormat = savedFormat;
+
+            if(finalFormat.mOutputType == DisplayManager.DISPLAY_OUTPUT_TYPE_HDMI){
+                boolean isSupport = (displayManager.isSupportHdmiMode(finalFormat.mFormat) != 0);
+                if(!isSupport){
+                    Log.d(TAG, "HDMI mode " + DispList.ItemCode2Name(finalFormat) + " is NOT supported by the TV.");
+                    finalFormat = DispList.HDMI_DEFAULT_FORMAT;
+                }
+            }
+            Log.d(TAG, "final format is " + DispList.ItemCode2Name(finalFormat));
+            displayManager.setDisplayOutputType(0, finalFormat.mOutputType, finalFormat.mFormat);
+            Settings.System.putString(context.getContentResolver(), Settings.System.DISPLY_OUTPUT_FORMAT,
+                                      DispList.ItemCode2Name(finalFormat));
+
+            /* init audio output channel */
+            AudioManager audioManager = new AudioManager(context);
+            if(audioManager == null){
+                Log.e(TAG, "audioManager is null");
+            }else {
+            	/*modified by chenjd,chenjd@allwinnertech.com,20120711,start {{---------- */
+            	String audioOutputChannels = Settings.System.getString(context.getContentResolver(),
+					Settings.System.AUDIO_OUTPUT_CHANNEL);
+				if(audioOutputChannels == null) {
+					Log.d(TAG,"use default audio output channel:" + audioOutputChannels);
+					audioOutputChannels = AudioManager.AUDIO_NAME_CODEC;
+				}
+				Log.d(TAG, "saved audio channel is " + audioOutputChannels);
+				ArrayList<String> audioDevList = new ArrayList<String>();
+				String[] audioList = audioOutputChannels.split(",");
+				for(String audio:audioList){
+					if(!"".equals(audio)){
+						if(audio.contains("HDMI")){
+							audioDevList.add(AudioManager.AUDIO_NAME_HDMI);
+						}else if(audio.contains("CODEC")){
+							audioDevList.add(AudioManager.AUDIO_NAME_CODEC);
+						}else if(audio.contains("SPDIF")){
+							audioDevList.add(AudioManager.AUDIO_NAME_SPDIF);
+						}
+					}
+				}
+				audioManager.setAudioDeviceActive(audioDevList,AudioManager.AUDIO_OUTPUT_ACTIVE);
+				/* record the audio output channel */
+				String st = null;
+				for(int i = 0; i < audioDevList.size(); i++){
+					if(st == null){
+						st = audioDevList.get(i);
+					}
+					else{
+						st = st + "," + audioDevList.get(i);
+					}
+				}
+				Settings.System.putString(context.getContentResolver(), Settings.System.AUDIO_OUTPUT_CHANNEL,st);
+				Log.d(TAG,"audio channels change to {" + st + "}");
+				/*modified by chenjd,end --------------}} */
+
+				/*
+                String audioOutputChannelName = Settings.System.getString(context.getContentResolver(),
+                                                                          Settings.System.AUDIO_OUTPUT_CHANNEL);
+                Log.d(TAG, "saved audio channel is " + audioOutputChannelName);
+                int audioOutputChannel = AudioManager.auidoOutputChannelName2Code(audioOutputChannelName);
+                audioManager.switchAudioOutMode(audioOutputChannel);
+                /* record the audio output channel */
+				/*
+                Settings.System.putString(context.getContentResolver(), Settings.System.AUDIO_OUTPUT_CHANNEL,
+                                          AudioManager.auidoOutputChannelCode2Name(audioOutputChannel));
+                                          */
+            }
+        } else {
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-10 */
+            /* init display output */
+            boolean ypbprIsConnected = false;
+            boolean cvbsIsConnected = false;
+            boolean hdmiIsConnected = false;
+            DispList.DispFormat finalFormat = null;
+
+//            DisplayManager displayManager = (DisplayManager)context.getSystemService(Context.DISPLAY_SERVICE);
+            DisplayManager displayManager = new DisplayManager();
+            if(displayManager == null)
+                Log.w(TAG, "Fail in creating DisplayManager.");
+
+            /* check cable's connection status */
+            if(displayManager.getHdmiHotPlugStatus() != 0)
+                hdmiIsConnected = true;
+
+            int tvStatus = displayManager.getTvHotPlugStatus();
+            Log.d(TAG, "tv connect status = " + tvStatus);
+            if(tvStatus == DisplayManager.DISPLAY_TVDAC_CVBS)
+                cvbsIsConnected = true;
+            else if(tvStatus == DisplayManager.DISPLAY_TVDAC_YPBPR)
+                ypbprIsConnected = true;
+            else if(tvStatus == DisplayManager.DISPLAY_TVDAC_ALL){
+                cvbsIsConnected = true;
+                ypbprIsConnected = true;
+            }
+            Log.d(TAG, "HDMI connect status = " + hdmiIsConnected + ", av connnect status = "
+                  + cvbsIsConnected + ", YPbPr connect status = " + ypbprIsConnected);
+
+            DispList.DispFormat savedFormat = null;
+            String savedFormatName = Settings.System.getString(context.getContentResolver(), Settings.System.DISPLY_OUTPUT_FORMAT);
+            if(savedFormatName == null){
+                Log.w(TAG, "Fail in getting saved display format.");
+                savedFormat = DispList.HDMI_DEFAULT_FORMAT;
+            }else{
+                savedFormat = DispList.ItemName2Code(savedFormatName);
+            }
+            Log.d(TAG, "saved display = " + DispList.ItemCode2Name(savedFormat));
+            int savedType = savedFormat.mOutputType;
+            DispList.DispFormat curFormat = new DispList.DispFormat(displayManager.getDisplayOutputType(0),
+                                                                    displayManager.getDisplayOutputFormat(0));
+            Log.d(TAG, "current format is " + curFormat);
+
+            int savedIntType = DispList.getAdvancedDisplayType(savedFormat);
+            int finalIntType = DispList.ADVANCED_DISPLAY_TYPE_HDMI;
+            if(hdmiIsConnected && DispList.isHDMI(curFormat)){
+                finalIntType = DispList.ADVANCED_DISPLAY_TYPE_HDMI;
+                finalFormat = curFormat;
+            }else if(cvbsIsConnected && DispList.isCVBS(curFormat)){
+                finalIntType = DispList.ADVANCED_DISPLAY_TYPE_CVBS;
+                finalFormat = curFormat;
+            }else if(mDeviceHasYpbpr && ypbprIsConnected && DispList.isYPbPr(curFormat)){
+                finalIntType = DispList.ADVANCED_DISPLAY_TYPE_YPBPR;
+                finalFormat = curFormat;
+            }else if(hdmiIsConnected){
+                finalIntType = DispList.ADVANCED_DISPLAY_TYPE_HDMI;
+                finalFormat = DispList.HDMI_DEFAULT_FORMAT;
+            }else if(cvbsIsConnected){
+                finalIntType = DispList.ADVANCED_DISPLAY_TYPE_CVBS;
+                finalFormat = DispList.CVBS_DEFAULT_FORMAT;
+            }else if(mDeviceHasYpbpr && ypbprIsConnected){
+                finalIntType = DispList.ADVANCED_DISPLAY_TYPE_YPBPR;
+                finalFormat = DispList.YPBPR_DEFAULT_FORMAT;
+            }else {
+                finalIntType = savedIntType;
+                finalFormat = savedFormat;
+            }
+
+            if(finalIntType == savedIntType)
+                finalFormat = savedFormat;
+
+            if(finalFormat.mOutputType == DisplayManager.DISPLAY_OUTPUT_TYPE_HDMI){
+                boolean isSupport = (displayManager.isSupportHdmiMode(finalFormat.mFormat) != 0);
+                if(!isSupport){
+                    Log.d(TAG, "HDMI mode " + DispList.ItemCode2Name(finalFormat) + " is NOT supported by the TV.");
+                    finalFormat = DispList.HDMI_DEFAULT_FORMAT;
+                }
+            }
+            Log.d(TAG, "final format is " + DispList.ItemCode2Name(finalFormat));
+            if(    curFormat.mOutputType != finalFormat.mOutputType
+                || curFormat.mFormat != finalFormat.mFormat ){
+//                displayManager.setDisplayOutputType(0, finalFormat.mOutputType, finalFormat.mFormat);
+      	        displayManager.setDisplayParameter(0, finalFormat.mOutputType, finalFormat.mFormat);
+		        displayManager.setDisplayMode(DisplayManager.getDisplayModeForIC());
+            }
+
+            Settings.System.putString(context.getContentResolver(), Settings.System.DISPLY_OUTPUT_FORMAT,
+                                      DispList.ItemCode2Name(finalFormat));
+
+            /* init the display area */
+            int ratio = Settings.System.getInt(context.getContentResolver(), Settings.System.DISPLAY_AREA_RATIO, 95);
+            Log.d(TAG, "display area ratio = " + ratio);
+            displayManager.setDisplayAreaPercent(0, ratio);
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-11-28 */
+            /* init audio output channel */
+            Log.d(TAG, "to init audio output");
+
+    //        AudioManager audioManager = (AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
+            AudioManager audioManager = new AudioManager(context);
+            if(audioManager == null){
+                Log.e(TAG, "audioManager is null");
+            }else {
+				/* modified by chenjd,chenjd@allwinnertech.com,20120710, start {{--------
+				 * init audio output mode,may be multi channels */
+				String audioOutputChannelName = Settings.System.getString(context.getContentResolver(),
+                                                                          Settings.System.AUDIO_OUTPUT_CHANNEL);
+				if(audioOutputChannelName == null) {
+					Log.d(TAG,"use default audio output channel:" + audioOutputChannelName);
+					audioOutputChannelName = AudioManager.AUDIO_NAME_CODEC;
+				}
+				Log.d(TAG, "saved audio channel is " + audioOutputChannelName);
+				ArrayList<String> audioOutputChannels = new ArrayList<String>();
+				String[] audioList = audioOutputChannelName.split(",");
+				for(String audio:audioList){
+					if(!"".equals(audio)){
+						audioOutputChannels.add(audio);
+					}
+				}
+				Log.d(TAG, "active the saved audio channels " + audioOutputChannels);
+				if(displayManager.getDisplayOutputType(0) == DisplayManager.DISPLAY_OUTPUT_TYPE_HDMI){
+					if(!audioOutputChannels.contains(AudioManager.AUDIO_NAME_SPDIF) &&
+						!audioOutputChannels.contains(AudioManager.AUDIO_NAME_HDMI)){
+						audioOutputChannels.clear();
+						audioOutputChannels.add(AudioManager.AUDIO_NAME_HDMI);
+					}
+				}else{
+					if(!audioOutputChannels.contains(AudioManager.AUDIO_NAME_SPDIF) &&
+						!audioOutputChannels.contains(AudioManager.AUDIO_NAME_CODEC)){
+						audioOutputChannels.clear();
+						audioOutputChannels.add(AudioManager.AUDIO_NAME_CODEC);
+
+					}
+				}
+				audioManager.setAudioDeviceActive(audioOutputChannels,AudioManager.AUDIO_OUTPUT_ACTIVE);
+				/* record the audio output channel */
+				String st = null;
+				for(int i = 0; i < audioOutputChannels.size(); i++){
+					if(st == null){
+						st = audioOutputChannels.get(i);
+					}
+					else{
+						st = st + "," + audioOutputChannels.get(i);
+					}
+				}
+				Settings.System.putString(context.getContentResolver(), Settings.System.AUDIO_OUTPUT_CHANNEL,st);
+				Log.d(TAG,"audio channels change to {" + st + "}");
+				/*
+                String audioOutputChannelName = Settings.System.getString(context.getContentResolver(),
+                                                                          Settings.System.AUDIO_OUTPUT_CHANNEL);
+                Log.d(TAG, "saved audio channel is " + audioOutputChannelName);
+                int audioOutputChannel = AudioManager.auidoOutputChannelName2Code(audioOutputChannelName);
+                if(displayManager.getDisplayOutputType(0) == DisplayManager.DISPLAY_OUTPUT_TYPE_HDMI){
+                    if(audioOutputChannel != AudioManager.AUDIO_OUT_CHANNEL_SPDIF)
+                        audioOutputChannel = AudioManager.AUDIO_OUT_CHANNEL_HDMI;
+                }else{
+                    if(audioOutputChannel != AudioManager.AUDIO_OUT_CHANNEL_SPDIF)
+                        audioOutputChannel = AudioManager.AUDIO_OUT_CHANNEL_CODEC;
+                }
+                audioManager.switchAudioOutMode(audioOutputChannel);
+                */
+                /* record the audio output channel */
+				/*
+                Settings.System.putString(context.getContentResolver(), Settings.System.AUDIO_OUTPUT_CHANNEL,
+                                          AudioManager.auidoOutputChannelCode2Name(audioOutputChannel));
+				*/
+				/* modified by chenjd,chenjd@allwinnertech.com,20120710, end ------}} */
+			}
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-11 */
+            /* init the color parameters : brightness, contrast,and saturation */
+            int value;
+            value = Settings.System.getInt(context.getContentResolver(), Settings.System.COLOR_BRIGHTNESS, 50);
+            Log.d(TAG, "color brightness = " + value);
+            displayManager.setDisplayBright(0, value);
+            value = Settings.System.getInt(context.getContentResolver(), Settings.System.COLOR_CONTRAST, 50);
+            Log.d(TAG, "color contrast = " + value);
+            displayManager.setDisplayContrast(0, value);
+            value = Settings.System.getInt(context.getContentResolver(), Settings.System.COLOR_SATURATION, 50);
+            Log.d(TAG, "color saturation = " + value);
+            displayManager.setDisplaySaturation(0, value);
+            /* add by Gary. end   -----------------------------------}} */
+        }
+
         // For debug builds, log event loop stalls to dropbox for analysis.
         if (StrictMode.conditionallyEnableDebugLogging()) {
             Slog.i(TAG, "Enabled StrictMode for system server main thread.");
         }
+
+		/* add by yangfuyang start the google tv remote server*/
+			new GoogleRemoteService(context).startServer();
 
         Looper.loop();
         Slog.d(TAG, "System ServerThread is exiting!");

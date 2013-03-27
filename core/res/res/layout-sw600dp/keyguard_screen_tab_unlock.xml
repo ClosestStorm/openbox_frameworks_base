@@ -57,8 +57,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="50dip"
                 android:layout_marginTop="50dip"
-                android:layout_marginBottom="100dip"
-                android:layout_marginRight="64dip"
+                android:layout_marginBottom="0dip"
+                android:layout_marginRight="50dip"
                 android:layout_alignParentTop="true"
                 android:layout_alignParentLeft="true"/>
 
@@ -68,7 +68,7 @@
 
     <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="0dip"
+            android:layout_height="100dip"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -100,9 +100,11 @@
             android:hitRadius="@dimen/multiwaveview_hit_radius"
             android:rightChevronDrawable="@drawable/ic_lockscreen_chevron_right"
             android:horizontalOffset="0dip"
-            android:verticalOffset="60dip"
+            android:verticalOffset="0dip"
             android:feedbackCount="3"
             android:vibrationDuration="20"
+			android:maxAppIconNum="8"
+			android:iconSize="60"
             />
 
         <!-- emergency call button shown when sim is PUKd and tab_selector is hidden -->

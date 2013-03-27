@@ -18,7 +18,11 @@ package android.bluetooth;
 
 import android.annotation.SdkConstant;
 import android.annotation.SdkConstant.SdkConstantType;
+import android.app.Activity;
+import android.app.ActivityThread;
 import android.content.Context;
+import android.content.pm.IPackageManager;
+import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
@@ -61,6 +65,12 @@ import java.util.UUID;
  * Most methods require the {@link android.Manifest.permission#BLUETOOTH}
  * permission and some also require the
  * {@link android.Manifest.permission#BLUETOOTH_ADMIN} permission.
+ *
+ * <div class="special reference">
+ * <h3>Developer Guides</h3>
+ * <p>For more information about using Bluetooth, read the
+ * <a href="{@docRoot}guide/topics/wireless/bluetooth.html">Bluetooth</a> developer guide.</p>
+ * </div>
  *
  * {@see BluetoothDevice}
  * {@see BluetoothServerSocket}
@@ -351,6 +361,27 @@ public final class BluetoothAdapter {
 
     private Handler mServiceRecordHandler;
 
+
+    /**
+     * Helper to check if this device has FEATURE_BLUETOOTH, but without using
+     * a context.
+     * Equivalent to
+     * context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
+     */
+    private static boolean hasBluetoothFeature() {
+        IPackageManager pm = ActivityThread.getPackageManager();
+        if (pm == null) {
+            Log.e(TAG, "Cannot get package manager, assuming no Bluetooth feature");
+            return false;
+        }
+        try {
+            return pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Package manager query failed, assuming no Bluetooth feature", e);
+            return false;
+        }
+    }
+
     /**
      * Get a handle to the default local Bluetooth adapter.
      * <p>Currently Android only supports one Bluetooth adapter, but the API
@@ -361,6 +392,10 @@ public final class BluetoothAdapter {
      */
     public static synchronized BluetoothAdapter getDefaultAdapter() {
         if (sAdapter == null) {
+        	if(!hasBluetoothFeature()) {
+        		Log.e(TAG, "this device does not have Bluetooth support");
+        		return null;
+        	}
             IBinder b = ServiceManager.getService(BluetoothAdapter.BLUETOOTH_SERVICE);
             if (b != null) {
                 IBluetooth service = IBluetooth.Stub.asInterface(b);
@@ -1180,11 +1215,29 @@ public final class BluetoothAdapter {
      * @param proxy Profile proxy object
      */
     public void closeProfileProxy(int profile, BluetoothProfile proxy) {
-        if (profile == BluetoothProfile.HEADSET) {
-            BluetoothHeadset headset = (BluetoothHeadset)proxy;
-            if (headset != null) {
+        if (proxy == null) return;
+
+        switch (profile) {
+            case BluetoothProfile.HEADSET:
+                BluetoothHeadset headset = (BluetoothHeadset)proxy;
                 headset.close();
-            }
+                break;
+            case BluetoothProfile.A2DP:
+                BluetoothA2dp a2dp = (BluetoothA2dp)proxy;
+                a2dp.close();
+                break;
+            case BluetoothProfile.INPUT_DEVICE:
+                BluetoothInputDevice iDev = (BluetoothInputDevice)proxy;
+                iDev.close();
+                break;
+            case BluetoothProfile.PAN:
+                BluetoothPan pan = (BluetoothPan)proxy;
+                pan.close();
+                break;
+            case BluetoothProfile.HEALTH:
+                BluetoothHealth health = (BluetoothHealth)proxy;
+                health.close();
+                break;
         }
     }
 

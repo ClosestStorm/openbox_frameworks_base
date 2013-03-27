@@ -70,6 +70,7 @@ import org.xmlpull.v1.XmlSerializer;
 import com.android.internal.content.PackageMonitor;
 import com.android.internal.util.FastXmlSerializer;
 import com.android.internal.util.JournaledFile;
+import com.android.internal.os.AtomicFile;
 
 class WallpaperManagerService extends IWallpaperManager.Stub {
     static final String TAG = "WallpaperService";
@@ -169,6 +170,8 @@ class WallpaperManagerService extends IWallpaperManager.Stub {
     WallpaperConnection mWallpaperConnection;
     long mLastDiedTime;
     boolean mWallpaperUpdating;
+	
+	final static String mfilename = "/data/system/wallpaper_info.xml";
     
     class WallpaperConnection extends IWallpaperConnection.Stub
             implements ServiceConnection {
@@ -476,6 +479,13 @@ class WallpaperManagerService extends IWallpaperManager.Stub {
     ParcelFileDescriptor updateWallpaperBitmapLocked(String name) {
         if (name == null) name = "";
         try {
+            if (!WALLPAPER_DIR.exists()) {
+                WALLPAPER_DIR.mkdir();
+                FileUtils.setPermissions(
+                        WALLPAPER_DIR.getPath(),
+                        FileUtils.S_IRWXU|FileUtils.S_IRWXG|FileUtils.S_IXOTH,
+                        -1, -1);
+            }
             ParcelFileDescriptor fd = ParcelFileDescriptor.open(WALLPAPER_FILE,
                     MODE_CREATE|MODE_READ_WRITE);
             mName = name;
@@ -692,16 +702,16 @@ class WallpaperManagerService extends IWallpaperManager.Stub {
         }
     }
 
-    private static JournaledFile makeJournaledFile() {
+    private static AtomicFile makeAtomicFile() {
         final String base = "/data/system/wallpaper_info.xml";
-        return new JournaledFile(new File(base), new File(base + ".tmp"));
+        return new AtomicFile(new File(base));
     }
 
     private void saveSettingsLocked() {
-        JournaledFile journal = makeJournaledFile();
+        AtomicFile atomic = makeAtomicFile();
         FileOutputStream stream = null;
         try {
-            stream = new FileOutputStream(journal.chooseForWrite(), false);
+            stream = atomic.startWrite();
             XmlSerializer out = new FastXmlSerializer();
             out.setOutput(stream, "utf-8");
             out.startDocument(null, true);
@@ -719,7 +729,7 @@ class WallpaperManagerService extends IWallpaperManager.Stub {
 
             out.endDocument();
             stream.close();
-            journal.commit();
+            atomic.finishWrite(stream);
         } catch (IOException e) {
             try {
                 if (stream != null) {
@@ -728,19 +738,18 @@ class WallpaperManagerService extends IWallpaperManager.Stub {
             } catch (IOException ex) {
                 // Ignore
             }
-            journal.rollback();
+            atomic.failWrite(stream);
         }
     }
 
     private void loadSettingsLocked() {
         if (DEBUG) Slog.v(TAG, "loadSettingsLocked");
         
-        JournaledFile journal = makeJournaledFile();
+        AtomicFile atomic = makeAtomicFile();
         FileInputStream stream = null;
-        File file = journal.chooseForRead();
         boolean success = false;
         try {
-            stream = new FileInputStream(file);
+            stream = atomic.openRead();
             XmlPullParser parser = Xml.newPullParser();
             parser.setInput(stream, null);
 
@@ -773,15 +782,15 @@ class WallpaperManagerService extends IWallpaperManager.Stub {
             } while (type != XmlPullParser.END_DOCUMENT);
             success = true;
         } catch (NullPointerException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (NumberFormatException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (XmlPullParserException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (IOException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (IndexOutOfBoundsException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         }
         try {
             if (stream != null) {

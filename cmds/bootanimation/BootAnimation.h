@@ -28,6 +28,8 @@
 
 #include <EGL/egl.h>
 #include <GLES/gl.h>
+#include <media/mediaplayer.h>
+
 
 class SkBitmap;
 
@@ -80,6 +82,7 @@ private:
 
     status_t initTexture(Texture* texture, AssetManager& asset, const char* name);
     status_t initTexture(void* buffer, size_t len);
+	void playBackgroundMusic(const char *url);
     bool android();
     bool movie();
 
@@ -95,6 +98,7 @@ private:
     sp<Surface> mFlingerSurface;
     bool        mAndroidAnimation;
     ZipFileRO   mZip;
+	sp<MediaPlayer> mMediaPlayerControl;
 };
 
 // ---------------------------------------------------------------------------

@@ -31,6 +31,9 @@ public class Build {
     /** A build ID string meant for displaying to the user */
     public static final String DISPLAY = getString("ro.build.display.id");
 
+	/**a firmware realse */
+	public static final String FIRMWARE = getString("ro.product.firmware");
+
     /** The name of the overall product. */
     public static final String PRODUCT = getString("ro.product.name");
 
@@ -57,6 +60,9 @@ public class Build {
 
     /** The system bootloader version number. */
     public static final String BOOTLOADER = getString("ro.bootloader");
+
+	/**a property to tablet systemUI */
+	public static final String TABLETUI = getString("ro.property.tabletUI");
 
     /**
      * The radio firmware version number.
@@ -311,7 +317,7 @@ public class Build {
         public static final int ICE_CREAM_SANDWICH = 14;
 
         /**
-         * Android 4.1.
+         * Android 4.0.3.
          */
         public static final int ICE_CREAM_SANDWICH_MR1 = 15;
     }

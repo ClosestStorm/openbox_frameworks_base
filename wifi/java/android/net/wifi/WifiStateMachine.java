@@ -306,8 +306,6 @@ public class WifiStateMachine extends StateMachine {
     static final int CMD_SET_HIGH_PERF_MODE               = BASE + 77;
     /* Set the country code */
     static final int CMD_SET_COUNTRY_CODE                 = BASE + 80;
-    /* Request connectivity manager wake lock before driver stop */
-    static final int CMD_REQUEST_CM_WAKELOCK              = BASE + 81;
     /* Enables RSSI poll */
     static final int CMD_ENABLE_RSSI_POLL                 = BASE + 82;
     /* RSSI poll */
@@ -369,6 +367,10 @@ public class WifiStateMachine extends StateMachine {
 
     private static final int SUCCESS = 1;
     private static final int FAILURE = -1;
+
+    /* Phone in emergency call back mode */
+    private static final int IN_ECM_STATE = 1;
+    private static final int NOT_IN_ECM_STATE = 0;
 
     /**
      * The maximum number of times we will retry a connection to an access point
@@ -768,7 +770,29 @@ public class WifiStateMachine extends StateMachine {
      *
      */
     public WifiInfo syncRequestConnectionInfo() {
-        return mWifiInfo;
+		/*  Cheat ethernet to wifi --Begin-- add by shugeLinux@gmail.com  */
+		if(syncGetWifiState() != WIFI_STATE_ENABLED){
+			checkAndSetConnectivityInstance();
+			NetworkInfo networkinfo = mCm.getNetworkInfo(ConnectivityManager.TYPE_ETHERNET);
+			if((networkinfo !=null) && (networkinfo.isConnected())){
+				WifiInfo notwifiInfo = new WifiInfo();
+				LinkProperties ethLinkpro = 
+						mCm.getLinkProperties(ConnectivityManager.TYPE_ETHERNET);
+				notwifiInfo.setSSID("android_wifi");
+				notwifiInfo.setBSSID("vitrul_wifi");
+				notwifiInfo.setNetworkId(1);
+				notwifiInfo.setRssi(-40);
+				notwifiInfo.setSupplicantState(SupplicantState.COMPLETED);
+				for(InetAddress ethaddr : ethLinkpro.getAddresses()){
+					notwifiInfo.setInetAddress(ethaddr);
+					break;
+				}
+				notwifiInfo.setLinkSpeed(54);
+				return notwifiInfo;
+			}
+		}
+		/*  Cheat ethernet to wifi --End-- add by shugeLinux@gmail.com  */
+		return mWifiInfo;
     }
 
     public DhcpInfo syncGetDhcpInfo() {
@@ -780,11 +804,11 @@ public class WifiStateMachine extends StateMachine {
     /**
      * TODO: doc
      */
-    public void setDriverStart(boolean enable) {
+    public void setDriverStart(boolean enable, boolean ecm) {
         if (enable) {
             sendMessage(CMD_START_DRIVER);
         } else {
-            sendMessage(CMD_STOP_DRIVER);
+            sendMessage(obtainMessage(CMD_STOP_DRIVER, ecm ? IN_ECM_STATE : NOT_IN_ECM_STATE, 0));
         }
     }
 
@@ -946,6 +970,11 @@ public class WifiStateMachine extends StateMachine {
         sendMessage(msg);
     }
 
+     //patch for wps
+    public boolean isDoingWps() {
+        return getCurrentState() == mWaitForWpsCompletionState;
+    }
+
     public void enableRssiPolling(boolean enabled) {
        sendMessage(obtainMessage(CMD_ENABLE_RSSI_POLL, enabled ? 1 : 0, 0));
     }
@@ -1059,15 +1088,6 @@ public class WifiStateMachine extends StateMachine {
         boolean result = (resultMsg.arg1 != FAILURE);
         resultMsg.recycle();
         return result;
-    }
-
-    /**
-     * Request a wakelock with connectivity service to
-     * keep the device awake until we hand-off from wifi
-     * to an alternate network
-     */
-    public void requestCmWakeLock() {
-        sendMessage(CMD_REQUEST_CM_WAKELOCK);
     }
 
     public void updateBatteryWorkSource(WorkSource newSource) {
@@ -1867,7 +1887,6 @@ public class WifiStateMachine extends StateMachine {
                 case CMD_SET_HIGH_PERF_MODE:
                 case CMD_SET_COUNTRY_CODE:
                 case CMD_SET_FREQUENCY_BAND:
-                case CMD_REQUEST_CM_WAKELOCK:
                 case CMD_CONNECT_NETWORK:
                 case CMD_SAVE_NETWORK:
                 case CMD_FORGET_NETWORK:
@@ -2588,16 +2607,25 @@ public class WifiStateMachine extends StateMachine {
                     WifiNative.setBluetoothCoexistenceScanModeCommand(mBluetoothConnectionActive);
                     break;
                 case CMD_STOP_DRIVER:
-                    /* Already doing a delayed stop */
-                    if (mInDelayedStop) {
+                    int mode = message.arg1;
+
+                    /* Already doing a delayed stop && not in ecm state */
+                    if (mInDelayedStop && mode != IN_ECM_STATE) {
                         if (DBG) log("Already in delayed stop");
                         break;
                     }
                     mInDelayedStop = true;
                     mDelayedStopCounter++;
                     if (DBG) log("Delayed stop message " + mDelayedStopCounter);
-                    sendMessageDelayed(obtainMessage(CMD_DELAYED_STOP_DRIVER, mDelayedStopCounter,
-                            0), DELAYED_DRIVER_STOP_MS);
+
+                    if (mode == IN_ECM_STATE) {
+                        /* send a shut down immediately */
+                        sendMessage(obtainMessage(CMD_DELAYED_STOP_DRIVER, mDelayedStopCounter, 0));
+                    } else {
+                        /* send regular delayed shut down */
+                        sendMessageDelayed(obtainMessage(CMD_DELAYED_STOP_DRIVER,
+                                mDelayedStopCounter, 0), DELAYED_DRIVER_STOP_MS);
+                    }
                     break;
                 case CMD_START_DRIVER:
                     if (mInDelayedStop) {
@@ -3024,10 +3052,6 @@ public class WifiStateMachine extends StateMachine {
                     WifiNative.disconnectCommand();
                     transitionTo(mDisconnectingState);
                     break;
-                case CMD_REQUEST_CM_WAKELOCK:
-                    checkAndSetConnectivityInstance();
-                    mCm.requestNetworkTransitionWakelock(TAG);
-                    break;
                 case CMD_SET_SCAN_MODE:
                     if (message.arg1 == SCAN_ONLY_MODE) {
                         sendMessage(CMD_DISCONNECT);
@@ -3100,6 +3124,11 @@ public class WifiStateMachine extends StateMachine {
         }
         @Override
         public void exit() {
+
+            /* Request a CS wakelock during transition to mobile */
+            checkAndSetConnectivityInstance();
+            mCm.requestNetworkTransitionWakelock(TAG);
+
             /* If a scan result is pending in connected state, the supplicant
              * is in SCAN_ONLY_MODE. Restore CONNECT_MODE on exit
              */

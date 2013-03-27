@@ -313,7 +313,7 @@ public class WifiP2pDevice implements Parcelable {
     }
 
     //supported formats: 0x1abc, 0X1abc, 1abc
-    private int parseHex(String hexString) {
+    int parseHex(String hexString) {
         int num = 0;
         if (hexString.startsWith("0x") || hexString.startsWith("0X")) {
             hexString = hexString.substring(2);

@@ -245,6 +245,10 @@ public class WifiNative {
         return doBooleanCommand("P2P_FIND " + timeout);
     }
 
+    public static boolean p2pStopFind() {
+        return doBooleanCommand("P2P_STOP_FIND");
+    }
+
     public static boolean p2pListen() {
         return doBooleanCommand("P2P_LISTEN");
     }
@@ -283,7 +287,8 @@ public class WifiNative {
                 break;
             case WpsInfo.LABEL:
                 args.add(wps.pin);
-                args.add("label");
+                //args.add("label");
+                args.add("display");
             default:
                 break;
         }
@@ -355,12 +360,24 @@ public class WifiNative {
 
         for (String token : tokens) {
             //TODO: update from interface_addr when wpa_supplicant implementation is fixed
+            if (token.startsWith("interface_addr=")) {
+                String[] nameValue = token.split("=");
+                if ((nameValue.length == 2) &&
+                    !(nameValue[1].equals("00:00:00:00:00:00"))) {
+                    Log.d("WifiNative", "p2pGetInterfaceAddress(" + deviceAddress + ") returns " + nameValue[1]);
+                    return nameValue[1];
+                }
+            }
             if (token.startsWith("intended_addr=")) {
                 String[] nameValue = token.split("=");
-                if (nameValue.length != 2) break;
-                return nameValue[1];
+                if ((nameValue.length == 2) &&
+                    !(nameValue[1].equals("00:00:00:00:00:00"))) {
+                    Log.d("WifiNative", "p2pGetInterfaceAddress(" + deviceAddress + ") returns " + nameValue[1]);
+                    return nameValue[1];
+                }
             }
         }
+        Log.d("WifiNative", "p2pGetInterfaceAddress(" + deviceAddress + ") returns null");
         return null;
     }
 

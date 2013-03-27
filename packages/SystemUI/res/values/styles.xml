@@ -71,6 +71,11 @@
         <item name="android:windowExitAnimation">@anim/status_bar_exit</item>
     </style>
 
+    <style name="Animation.TabletStatusBar">
+        <item name="android:windowEnterAnimation">@anim/tabletstatus_bar_enter</item>
+        <item name="android:windowExitAnimation">@anim/tabletstatus_bar_exit</item>
+    </style>
+
     <style name="Animation.StatusBar.IntruderAlert">
         <item name="android:windowEnterAnimation">@anim/priority_alert_enter</item>
         <item name="android:windowExitAnimation">@anim/priority_alert_exit</item>

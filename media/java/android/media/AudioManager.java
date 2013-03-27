@@ -39,6 +39,8 @@ import android.view.VolumePanel;
 
 import java.util.Iterator;
 import java.util.HashMap;
+import android.os.SystemProperties;
+import java.util.ArrayList;
 
 /**
  * AudioManager provides access to volume and ringer mode control.
@@ -2046,4 +2048,183 @@ public class AudioManager {
         }
     }
 
+	/* add by Chenjd. start {{------------------------------------ */
+	/* 2012-06-12 */
+	/* define audio device name */
+	public static final String AUDIO_NAME_CODEC		= "AUDIO_CODEC";
+	public static final String AUDIO_NAME_HDMI		= "AUDIO_HDMI";
+	public static final String AUDIO_NAME_SPDIF		= "AUDIO_SPDIF";
+
+	/* define type of device */
+	public static final String AUDIO_INPUT_TYPE		= "audio_devices_in";
+	public static final String AUDIO_OUTPUT_TYPE	= "audio_devices_out";
+	public static final String AUDIO_INPUT_ACTIVE	= "audio_devices_in_active";
+	public static final String AUDIO_OUTPUT_ACTIVE	= "audio_devices_out_active";
+	/* get audio devices list(the devices which are supported)
+	*  @param devType  the audio device type,maybe in/out
+	*/
+	public ArrayList<String> getAudioDevices(String devType){
+		if(!devType.equals(AUDIO_INPUT_TYPE) && !devType.equals(AUDIO_OUTPUT_TYPE)){
+			return null;
+		}
+		ArrayList<String> audioDevList = new ArrayList<String>();
+		String list = getParameters(devType);
+		if(list == null) 
+			return null;
+		Log.d(TAG,"type " + devType + "  list " + list);
+		String[] audioList = list.split(",");
+		for (String audio: audioList) {
+		    if (!"".equals(audio)) {
+		         audioDevList.add(audio);
+		    }
+		}
+		return audioDevList;
+	}
+
+	/* get current active devices */
+	/* @param devType  the audio device type
+	*  @return the current list of the active device
+	*/
+	public ArrayList<String> getActiveAudioDevices(String devType){
+		if(!devType.equals(AUDIO_INPUT_ACTIVE) && !devType.equals(AUDIO_OUTPUT_ACTIVE)){
+			return null;
+		}
+		ArrayList<String> audioDevList = new ArrayList<String>();
+		String list = getParameters(devType);
+		if(list == null) 
+			return null;
+		Log.d(TAG,"type " + devType + "  list " + list);
+		String[] audioList = list.split(",");
+		for (String audio: audioList) {
+		    if (!"".equals(audio)) {
+		         audioDevList.add(audio);
+		    }
+		}
+		return audioDevList;
+	}
+
+	/* set audio devices active
+	* @param devices
+	* @param state  must be AUDIO_INPUT_ACTIVE or AUDIO_OUTPUT_ACTIVE
+	*/
+	public void setAudioDeviceActive(ArrayList<String> devices, String state){
+		if(!state.equals(AUDIO_INPUT_ACTIVE) && !state.equals(AUDIO_OUTPUT_ACTIVE))
+			return;
+		String audio = null;
+		for(String device:devices){
+			if(audio == null){
+				audio = device;
+			}else{
+				audio = audio + "," + device;
+			}
+		}
+		setParameter(state,audio);
+	}
+
+	/* add by Chenjd. end  ----------------------------------------}} */
+
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-11-9 */
+    /* export switchAudioOutMode() in AudioManager.java *//*
+	public static final int AUDIO_OUT_CHANNEL_CODEC = DEVICE_OUT_SPEAKER;
+	public static final int AUDIO_OUT_CHANNEL_HDMI  = DEVICE_OUT_AUX_DIGITAL ;
+	public static final int AUDIO_OUT_CHANNEL_SPDIF	= DEVICE_OUT_DGTL_DOCK_HEADSET;
+
+	public static final String AUDIO_OUT_CHANNEL_NAME_CODEC = "CODEC";
+	public static final String AUDIO_OUT_CHANNEL_NAME_HDMI  = "HDMI";
+	public static final String AUDIO_OUT_CHANNEL_NAME_SPDIF = "SPDIF";
+
+	private int mMode = AUDIO_OUT_CHANNEL_HDMI;
+	
+    public void switchAudioOutMode(int mode) {
+		Log.d(TAG, "set mode = " + mode);
+		SystemProperties.set("audio.routing", Integer.toString(mode));
+        setParameters("routing="+mode);
+		mMode = mode;
+    }
+
+    public int getAudioOutMode() {
+        int mode = AUDIO_OUT_CHANNEL_CODEC;
+        String pairs = getParameters("routing");
+        if(pairs == null)
+            Log.e(TAG, "fail in gefetParameters for routing.");
+        else {
+			Log.d(TAG, "pairs = " + pairs);
+            //String[] array = pairs.split("=");
+			//for(int i = 0; i < array.length; i++)
+			//	Log.d(TAG, "array " + i + " = " + array[i]);
+			//if(array.length >= 1)
+            //	mode = Integer.valueOf(array[0]).intValue();
+            mode = Integer.valueOf(pairs).intValue();
+        }
+        
+        return mode;
+    }
+
+	public static String auidoOutputChannelCode2Name(int code){
+	    switch(code){
+	        case AUDIO_OUT_CHANNEL_CODEC:
+	            return AUDIO_OUT_CHANNEL_NAME_CODEC;
+	        case AUDIO_OUT_CHANNEL_HDMI:
+	            return AUDIO_OUT_CHANNEL_NAME_HDMI;
+	        case AUDIO_OUT_CHANNEL_SPDIF :
+	            return AUDIO_OUT_CHANNEL_NAME_SPDIF;
+	        default:
+	            return AUDIO_OUT_CHANNEL_NAME_CODEC;
+	    }
+    }
+
+	public static int auidoOutputChannelName2Code(String name){
+	    if(name == null)
+	        return AUDIO_OUT_CHANNEL_CODEC;
+	        
+	    if(name.equals(AUDIO_OUT_CHANNEL_NAME_CODEC))
+	        return AUDIO_OUT_CHANNEL_CODEC;
+	    else if(name.equals(AUDIO_OUT_CHANNEL_NAME_HDMI))
+	        return AUDIO_OUT_CHANNEL_HDMI;
+	    else if(name.equals(AUDIO_OUT_CHANNEL_NAME_SPDIF))
+	        return AUDIO_OUT_CHANNEL_SPDIF;
+        else
+            return AUDIO_OUT_CHANNEL_CODEC;
+    }*/
+    /* add by Gary. end   -----------------------------------}} */
+
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-12-11 */
+    /* select audio output type */
+	public static final int AUDIO_OUT_TYPE_NORMAL         = 0;
+	public static final int AUDIO_OUT_TYPE_SPDIF_PCM      = 1;
+	public static final int AUDIO_OUT_TYPE_SPDIF_RAW_DATA = 2;
+
+	public static final String AUDIO_OUT_TYPE_NAME_NORMAL         = "NORMAL";
+	public static final String AUDIO_OUT_TYPE_NAME_SPDIF_PCM      = "SPDIF PCM";
+	public static final String AUDIO_OUT_TYPE_NAME_SPDIF_RAW_DATA = "SPDIF RAW DATA";
+	
+	public static String auidoOutputTypeCode2Name(int code){
+	    switch(code){
+	        case AUDIO_OUT_TYPE_NORMAL:
+	            return AUDIO_OUT_TYPE_NAME_NORMAL;
+	        case AUDIO_OUT_TYPE_SPDIF_PCM:
+	            return AUDIO_OUT_TYPE_NAME_SPDIF_PCM;
+	        case AUDIO_OUT_TYPE_SPDIF_RAW_DATA :
+	            return AUDIO_OUT_TYPE_NAME_SPDIF_RAW_DATA;
+	        default:
+	            return AUDIO_OUT_TYPE_NAME_NORMAL;
+	    }
+    }
+
+	public static int auidoOutputTypeName2Code(String name){
+	    if(name == null)
+	        return AUDIO_OUT_TYPE_NORMAL;
+	        
+	    if(name.equals(AUDIO_OUT_TYPE_NAME_NORMAL))
+	        return AUDIO_OUT_TYPE_NORMAL;
+	    else if(name.equals(AUDIO_OUT_TYPE_NAME_SPDIF_PCM))
+	        return AUDIO_OUT_TYPE_SPDIF_PCM;
+	    else if(name.equals(AUDIO_OUT_TYPE_NAME_SPDIF_RAW_DATA))
+	        return AUDIO_OUT_TYPE_SPDIF_RAW_DATA;
+        else
+            return AUDIO_OUT_TYPE_NORMAL;
+    }
+    /* add by Gary. end   -----------------------------------}} */
 }

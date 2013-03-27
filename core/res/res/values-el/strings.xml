@@ -137,6 +137,9 @@
     <string name="turn_off_radio" msgid="8198784949987062346">"Απενεργοποίηση ασύρματου"</string>
     <string name="screen_lock" msgid="799094655496098153">"Κλείδωμα οθόνης"</string>
     <string name="power_off" msgid="4266614107412865048">"Απενεργοποίηση"</string>
+    <string name="silent_mode_silent" msgid="319298163018473078">"Ειδοποίηση ήχου ανενεργή"</string>
+    <string name="silent_mode_vibrate" msgid="7072043388581551395">"Δόνηση ειδοποίησης ήχου"</string>
+    <string name="silent_mode_ring" msgid="8592241816194074353">"Ειδοποίηση ήχου ενεργή"</string>
     <string name="shutdown_progress" msgid="2281079257329981203">"Απενεργοποίηση..."</string>
     <string name="shutdown_confirm" product="tablet" msgid="3385745179555731470">"Το tablet σας θα απενεργοποιηθεί."</string>
     <string name="shutdown_confirm" product="default" msgid="649792175242821353">"Το τηλέφωνό σας θα απενεργοποιηθεί."</string>
@@ -959,6 +962,9 @@
     <item quantity="one" msgid="1634101450343277345">"Υπάρχει διαθέσιμο ανοικτό δίκτυο Wi-Fi"</item>
     <item quantity="other" msgid="7915895323644292768">"Υπάρχουν διαθέσιμα ανοικτά δίκτυα Wi-Fi"</item>
   </plurals>
+    <string name="wifi_available_sign_in" msgid="9157196203958866662">"Συνδεθείτε στο δίκτυο Wi-Fi"</string>
+    <!-- no translation found for wifi_available_sign_in_detailed (6797764740339907572) -->
+    <skip />
     <string name="wifi_watchdog_network_disabled" msgid="7904214231651546347">"Δεν είναι δυνατή η σύνδεση στο Wi-Fi"</string>
     <string name="wifi_watchdog_network_disabled_detailed" msgid="4917472096696322767">" έχει κακή σύνδεση Διαδικτύου."</string>
     <string name="wifi_p2p_dialog_title" msgid="97611782659324517">"Wi-Fi Direct"</string>

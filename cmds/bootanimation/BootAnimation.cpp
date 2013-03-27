@@ -146,6 +146,7 @@ status_t BootAnimation::initTexture(Texture* texture, AssetManager& assets,
     return NO_ERROR;
 }
 
+
 status_t BootAnimation::initTexture(void* buffer, size_t len)
 {
     //StopWatch watch("blah");
@@ -206,6 +207,23 @@ status_t BootAnimation::initTexture(void* buffer, size_t len)
     glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_CROP_RECT_OES, crop);
 
     return NO_ERROR;
+}
+
+void BootAnimation::playBackgroundMusic(const char *url)
+{   
+	LOGV("-----boot music start---");    
+	sp<MediaPlayer> mp = new MediaPlayer();    
+	if ((mp == NULL) ||(url ==NULL)) 
+	{       
+		LOGE("create mediaplayer error");       
+		return;    
+	}    
+	mMediaPlayerControl = mp;    
+	//sp<MediaPlayerListener> listener = new MediaPlayerListener(env, thiz, weak_this);    //mp->setListener(listener);    
+	mp->setDataSource(url,NULL);    
+	mp->prepare();   
+	mp->start();    
+	LOGV("-----boot music end---");
 }
 
 status_t BootAnimation::readyToRun() {
@@ -280,7 +298,8 @@ status_t BootAnimation::readyToRun() {
             (mZip.open(SYSTEM_BOOTANIMATION_FILE) == NO_ERROR))) {
         mAndroidAnimation = false;
     }
-
+	playBackgroundMusic("/system/media/boot.mp3");
+	
     return NO_ERROR;
 }
 

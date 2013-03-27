@@ -82,6 +82,7 @@ public class AlarmManager
      */
     public static final int ELAPSED_REALTIME = 3;
 
+	public static final int RTC_SHUTDOWN_WAKEUP = 4;
     private final IAlarmManager mService;
 
     /**

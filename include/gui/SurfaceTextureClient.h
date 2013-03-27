@@ -71,6 +71,8 @@ private:
     int dispatchSetUsage(va_list args);
     int dispatchLock(va_list args);
     int dispatchUnlockAndPost(va_list args);
+    int dispatchSetParameter(va_list args);
+    int dispatchGetParameter(va_list args);
 
 protected:
     virtual int cancelBuffer(ANativeWindowBuffer* buffer);
@@ -97,6 +99,8 @@ protected:
     enum { MIN_UNDEQUEUED_BUFFERS = SurfaceTexture::MIN_UNDEQUEUED_BUFFERS };
     enum { NUM_BUFFER_SLOTS = SurfaceTexture::NUM_BUFFER_SLOTS };
     enum { DEFAULT_FORMAT = PIXEL_FORMAT_RGBA_8888 };
+    virtual int setParameter(uint32_t cmd,uint32_t value);
+    virtual int getParameter(uint32_t cmd);
 
 private:
     void freeAllBuffers();

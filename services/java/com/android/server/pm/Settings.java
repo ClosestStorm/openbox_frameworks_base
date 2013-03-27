@@ -23,6 +23,7 @@ import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
 
 import com.android.internal.util.FastXmlSerializer;
 import com.android.internal.util.JournaledFile;
+import com.android.internal.os.AtomicFile;
 import com.android.internal.util.XmlUtils;
 import com.android.server.IntentResolver;
 import com.android.server.pm.PackageManagerService.DumpState;
@@ -740,7 +741,7 @@ final class Settings {
                 str = new FileInputStream(mBackupStoppedPackagesFilename);
                 mReadMessages.append("Reading from backup stopped packages file\n");
                 PackageManagerService.reportSettingsProblem(Log.INFO, "Need to read from backup stopped packages file");
-                if (mSettingsFilename.exists()) {
+                if (mStoppedPackagesFilename.exists()) {
                     // If both the backup and normal file exist, we
                     // ignore the normal one since it might have been
                     // corrupted.
@@ -955,12 +956,11 @@ final class Settings {
                     |FileUtils.S_IROTH,
                     -1, -1);
 
-            // Write package list file now, use a JournaledFile.
+            // Write package list file now, use a AtomicFile.
             //
-            File tempFile = new File(mPackageListFilename.toString() + ".tmp");
-            JournaledFile journal = new JournaledFile(mPackageListFilename, tempFile);
+            AtomicFile atomic = new AtomicFile(mPackageListFilename);
 
-            fstr = new FileOutputStream(journal.chooseForWrite());
+            fstr = atomic.startWrite();
             str = new BufferedOutputStream(fstr);
             try {
                 StringBuilder sb = new StringBuilder();
@@ -999,10 +999,10 @@ final class Settings {
                 str.flush();
                 FileUtils.sync(fstr);
                 str.close();
-                journal.commit();
+                atomic.finishWrite(fstr);
             } catch (Exception e) {
                 IoUtils.closeQuietly(str);
-                journal.rollback();
+                atomic.failWrite(fstr);
             }
 
             FileUtils.setPermissions(mPackageListFilename.toString(),

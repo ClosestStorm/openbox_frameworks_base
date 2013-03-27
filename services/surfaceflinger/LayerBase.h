@@ -252,6 +252,7 @@ private:
                 // thread.
                 bool            mInOverlay;
 
+
 protected:
                 // cached during validateVisibility()
                 int32_t         mOrientation;
@@ -273,11 +274,14 @@ protected:
 
                 // atomic
     volatile    int32_t         mInvalidate;
-                
 
 public:
     // called from class SurfaceFlinger
     virtual ~LayerBase();
+    
+    int             mDispWidth;
+    int             mDispHeight;
+    void            setDispSize(int w,int h);
 
 private:
     LayerBase(const LayerBase& rhs);

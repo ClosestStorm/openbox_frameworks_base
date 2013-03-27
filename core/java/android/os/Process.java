@@ -16,6 +16,10 @@
 
 package android.os;
 
+import static android.os.Process.PROC_OUT_LONG;
+import static android.os.Process.PROC_OUT_STRING;
+import static android.os.Process.PROC_PARENS;
+import static android.os.Process.PROC_SPACE_TERM;
 import android.net.LocalSocketAddress;
 import android.net.LocalSocket;
 import android.util.Log;
@@ -250,7 +254,7 @@ public class Process {
 
     /** true if previous zygote open failed */
     static boolean sPreviousZygoteOpenFailed;
-
+    
     /**
      * Start a new process.
      * 
@@ -586,6 +590,22 @@ public class Process {
         Process.readProcLines("/proc/" + pid + "/status", procStatusLabels, procStatusValues);
         return (int) procStatusValues[0];
     }
+    
+    public static final ProcStat getProc(int pid){
+    	ProcStat app = new ProcStat();
+    	long[] procStats = new long[22];
+    	String[] procStatsString = new String[22];
+    	if (Process.readProcFile("/proc/"+pid+"/stat",
+                PROCESS_FULL_STATS_FORMAT, procStatsString,
+                procStats, null)) {
+    		 app.setState(procStatsString[2]);
+    	     app.setUtime(procStats[13]);
+    	     app.setStime(procStats[14]);
+    	     app.setCutime(procStats[15]);
+    	     app.setCstime(procStats[16]);
+    	}
+        return app;
+    }
 
     /**
      * Set the priority of a thread, based on Linux priorities.
@@ -786,6 +806,31 @@ public class Process {
     /** @hide */
     public static final int PROC_OUT_FLOAT = 0x4000;
     
+    private static final int[] PROCESS_FULL_STATS_FORMAT = new int[] {
+        PROC_SPACE_TERM|PROC_OUT_STRING,				// 0: pid
+        PROC_SPACE_TERM|PROC_PARENS|PROC_OUT_STRING,    // 1: name
+        PROC_SPACE_TERM|PROC_OUT_STRING,				// 2: task_state R:runnign, S:sleeping (TASK_INTERRUPTIBLE), D:disk sleep (TASK_UNINTERRUPTIBLE), T: stopped, T:tracing stop,Z:zombie, X:dead
+        PROC_SPACE_TERM|PROC_OUT_LONG,  				// 3: ppid
+        PROC_SPACE_TERM|PROC_OUT_LONG,   			    // 4: pgid
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 5: sid
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 6: tty_nr
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 7: tty_pgrp
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 8: task->flags
+        PROC_SPACE_TERM|PROC_OUT_LONG,                  // 9: min_flt
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 10: cmin_flt
+        PROC_SPACE_TERM|PROC_OUT_LONG,                  // 11: maj_flt
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 12: cmaj_flt
+        PROC_SPACE_TERM|PROC_OUT_LONG,                  // 13: utime
+        PROC_SPACE_TERM|PROC_OUT_LONG,                  // 14: stime
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 15: cutime
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 16: cstime
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 17: priority
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 18: nice
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 19: num_threads
+        PROC_SPACE_TERM|PROC_OUT_LONG,					// 20: it_real_value
+        PROC_SPACE_TERM|PROC_OUT_LONG,                  // 21: start_time
+    };
+    
     /** @hide */
     public static final native boolean readProcFile(String file, int[] format,
             String[] outStrings, long[] outLongs, float[] outFloats);
@@ -821,3 +866,4 @@ public class Process {
         public boolean usingWrapper;
     }
 }
+

@@ -48,6 +48,8 @@
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
+#include <cutils/properties.h>
+
 
 #define INDENT "  "
 #define INDENT2 "    "
@@ -117,6 +119,7 @@ static const int32_t keyCodeRotationMap[][4] = {
         { AKEYCODE_DPAD_UP,     AKEYCODE_DPAD_LEFT,   AKEYCODE_DPAD_DOWN,   AKEYCODE_DPAD_RIGHT },
         { AKEYCODE_DPAD_LEFT,   AKEYCODE_DPAD_DOWN,   AKEYCODE_DPAD_RIGHT,  AKEYCODE_DPAD_UP },
 };
+static bool resetTouch = false;
 static const size_t keyCodeRotationMapSize =
         sizeof(keyCodeRotationMap) / sizeof(keyCodeRotationMap[0]);
 
@@ -156,7 +159,7 @@ static inline bool sourcesMatchMask(uint32_t sources, uint32_t sourceMask) {
 static bool isPointerDown(int32_t buttonState) {
     return buttonState &
             (AMOTION_EVENT_BUTTON_PRIMARY | AMOTION_EVENT_BUTTON_SECONDARY
-                    | AMOTION_EVENT_BUTTON_TERTIARY);
+                    /*| AMOTION_EVENT_BUTTON_TERTIARY|AMOTION_EVENT_BUTTON_OTHER*/);
 }
 
 static float calculateCommonVector(float a, float b) {
@@ -195,6 +198,9 @@ static void synthesizeButtonKeys(InputReaderContext* context, int32_t action,
     synthesizeButtonKey(context, action, when, deviceId, source, policyFlags,
             lastButtonState, currentButtonState,
             AMOTION_EVENT_BUTTON_FORWARD, AKEYCODE_FORWARD);
+	synthesizeButtonKey(context, action, when, deviceId, source, policyFlags,
+			   lastButtonState, currentButtonState,
+			   AMOTION_EVENT_BUTTON_TERTIARY, AKEYCODE_MENU);
 }
 
 
@@ -243,7 +249,25 @@ InputReader::InputReader(const sp<EventHubInterface>& eventHub,
 
     { // acquire lock
         AutoMutex _l(mLock);
-
+		        mKeySynced = true;
+        mKeyInMouseMode =false;
+        mKeySynced  = true;
+        mDistance   = 10;
+        mKeyDeviceId = 0;
+        mVirtualMouseCreated = false;
+        mMouseDeviceId = 0x0fff0fff;
+		mTouchDeviceId = 0x0fff0ffe;
+		mVirtualTouchCreated = false;
+		for(int i= 0;i < MAX_MOUSE_SIZE;i++)
+		{
+			mRealMouseDeviceId[i] = -1;
+		}
+        
+		mRealTouchDeviceId = -1;
+        mLeft = 0;
+        mRight = 0;
+        mTop = 0;
+        mBottom = 0;
         refreshConfigurationLocked(0);
         updateGlobalMetaStateLocked();
         updateInputConfigurationLocked();
@@ -318,7 +342,13 @@ void InputReader::processEventsLocked(const RawEvent* rawEvents, size_t count) {
 #if DEBUG_RAW_EVENTS
             LOGD("BatchSize: %d Count: %d", batchSize, count);
 #endif
-            processEventsForDeviceLocked(deviceId, rawEvent, batchSize);
+			convertEvent(rawEvent,batchSize);
+			if(batchSize > 0)
+			{
+				int32_t convertdeviceId = mConvertEventBuffer[0].deviceId;
+
+				processEventsForDeviceLocked(convertdeviceId, mConvertEventBuffer, batchSize);
+			}
         } else {
             switch (rawEvent->type) {
             case EventHubInterface::DEVICE_ADDED:
@@ -340,10 +370,129 @@ void InputReader::processEventsLocked(const RawEvent* rawEvents, size_t count) {
     }
 }
 
+InputDevice* InputReader::createVirtualMouse(const String8& name,uint32_t classes) 
+{
+    InputDevice* device = new InputDevice(&mContext, mMouseDeviceId, name,classes);
+	
+	// External devices.
+	if (classes & INPUT_DEVICE_CLASS_EXTERNAL) {
+		device->setExternal(true);
+	}
+
+    // Mouse-like devices.
+    device->addMapper(new CursorInputMapper(device));
+
+    return device;
+}
+
+void InputReader::addVirtualMouseDevice(nsecs_t when,uint32_t classes) 
+{
+    char devicename[80] = "Virtual Mouse Device";
+    String8 name = String8(devicename);
+    
+    InputDevice* device = createVirtualMouse(name,classes);
+    device->configure(when, &mConfig, 0);
+    device->reset(when);
+
+    if (device->isIgnored()) 
+    {
+        LOGI("Device added: id=0x%x", mMouseDeviceId);
+    } 
+    else 
+    {
+        LOGI("Device added: id=0x%x,sources=%08x", mMouseDeviceId,
+                device->getSources());
+    }
+
+    ssize_t deviceIndex = mDevices.indexOfKey(mMouseDeviceId);
+    if (deviceIndex < 0) 
+	{
+        mDevices.add(mMouseDeviceId, device);
+    } 
+	else 
+	{
+        LOGW("Ignoring spurious device added event for deviceId %d.", mMouseDeviceId);
+        delete device;
+        return;
+    }
+}
+
+InputDevice* InputReader::createVirtualTouch(const String8& name,uint32_t classes) 
+{
+    InputDevice* device = new InputDevice(&mContext, mTouchDeviceId, name,classes);
+
+    // Mouse-like devices.
+    device->addMapper(new MultiTouchInputMapper(device));
+
+    return device;
+}
+
+void InputReader::addVirtualTouchDevice(nsecs_t when,uint32_t classes) 
+{
+    char devicename[80] = "Virtual Touch Device";
+    String8 name = String8(devicename);
+    
+    InputDevice* device = createVirtualTouch(name,classes);
+    device->configure(when, &mConfig, 0);
+    device->reset(when);
+
+    if (device->isIgnored()) 
+    {
+        LOGV("Device added: id=0x%x", mTouchDeviceId);
+    } 
+    else 
+    {
+        LOGV("Device added: id=0x%x,sources=%08x", mTouchDeviceId,
+                device->getSources());
+    }
+
+   	ssize_t deviceIndex = mDevices.indexOfKey(mTouchDeviceId);
+    if (deviceIndex < 0) 
+	{
+		
+        LOGV("Device added success: id=0x%x", mTouchDeviceId);
+        mDevices.add(mTouchDeviceId, device);
+    } 
+	else 
+	{
+        LOGV("Ignoring spurious device added event for deviceId %d.", mTouchDeviceId);
+        delete device;
+        return;
+    }
+}
+
+
 void InputReader::addDeviceLocked(nsecs_t when, int32_t deviceId) {
     String8 name = mEventHub->getDeviceName(deviceId);
     uint32_t classes = mEventHub->getDeviceClasses(deviceId);
 
+	if(mVirtualMouseCreated == false)
+    {
+        addVirtualMouseDevice(when,INPUT_DEVICE_CLASS_CURSOR | INPUT_DEVICE_CLASS_EXTERNAL);
+
+        mVirtualMouseCreated = true;
+    }
+    
+    if (classes & INPUT_DEVICE_CLASS_CURSOR)
+    {
+    	for(int i= 0;i < MAX_MOUSE_SIZE;i++)
+		{
+			if(mRealMouseDeviceId[i] == -1)
+			{
+				mRealMouseDeviceId[i] = deviceId;
+				break;
+			}
+		}
+    }
+
+	if(mVirtualTouchCreated == false)
+    {
+        addVirtualTouchDevice(when,classes);
+
+        mVirtualTouchCreated = true;
+    }
+    
+	
     InputDevice* device = createDeviceLocked(deviceId, name, classes);
     device->configure(when, &mConfig, 0);
     device->reset(when);
@@ -366,6 +515,16 @@ void InputReader::addDeviceLocked(nsecs_t when, int32_t deviceId) {
 }
 
 void InputReader::removeDeviceLocked(nsecs_t when, int32_t deviceId) {
+
+	for(int i= 0;i < MAX_MOUSE_SIZE;i++)
+	{
+		if(mRealMouseDeviceId[i] == deviceId)
+		{
+			mRealMouseDeviceId[i] = -1;
+			break;
+		}
+	}
+
     InputDevice* device = NULL;
     ssize_t deviceIndex = mDevices.indexOfKey(deviceId);
     if (deviceIndex >= 0) {
@@ -394,7 +553,22 @@ InputDevice* InputReader::createDeviceLocked(int32_t deviceId,
 
     // External devices.
     if (classes & INPUT_DEVICE_CLASS_EXTERNAL) {
-        device->setExternal(true);
+        /* modified by Gary. start {{----------------------------------- */
+        /* 2012-8-1 */
+        /* give a chance to still show soft keyboard when hard keyboard is pluged in */
+        //device->setExternal(true);
+        if(classes & INPUT_DEVICE_CLASS_ALPHAKEY){
+            char value[PROPERTY_VALUE_MAX];
+            property_get("ro.sw.hidesoftkbwhenhardkbin", value, "0");
+            LOGD("--------------ro.sw.hidesoftkbwhenhardkbin is %s", value);
+            if (atoi(value)) {
+                device->setExternal(true);
+            }else {
+                device->setExternal(false);
+            }
+        }else
+            device->setExternal(true);
+        /* add by Gary. end   -----------------------------------}} */
     }
 
     // Switch-like devices.
@@ -419,6 +593,7 @@ InputDevice* InputReader::createDeviceLocked(int32_t deviceId,
     }
 
     if (keyboardSource != 0) {
+		mKeyDeviceId    = deviceId;
         device->addMapper(new KeyboardInputMapper(device, keyboardSource, keyboardType));
     }
 
@@ -441,6 +616,119 @@ InputDevice* InputReader::createDeviceLocked(int32_t deviceId,
 
     return device;
 }
+
+void InputReader::convertEvent(const RawEvent* rawEvents,size_t count) 
+{
+		RawEvent *tmpRawEvent = mConvertEventBuffer;
+
+		for (const RawEvent* rawEvent = rawEvents; count--; rawEvent++,tmpRawEvent++)
+		{
+#if DEBUG_RAW_EVENTS
+			LOGD("Input event: device=%d type=0x%04x scancode=0x%04x "
+					"keycode=0x%04x value=0x%08x flags=0x%08x",
+					rawEvent->deviceId, rawEvent->type, rawEvent->scanCode, rawEvent->keyCode,
+					rawEvent->value, rawEvent->flags);
+#endif
+			tmpRawEvent->deviceId = rawEvent->deviceId;
+		    tmpRawEvent->flags    = rawEvent->flags;
+		    tmpRawEvent->keyCode  = rawEvent->keyCode;
+		    tmpRawEvent->scanCode = rawEvent->scanCode;
+		    tmpRawEvent->type     = rawEvent->type;
+		    tmpRawEvent->value    = rawEvent->value;
+		    tmpRawEvent->when     = rawEvent->when;
+			//LOGD("tmpRawEvent->deviceId = %x,mMouseDeviceId = %x,mKeyDeviceId = %x\n",tmpRawEvent->deviceId,mMouseDeviceId,mKeyDeviceId);
+			//LOGD("mLeft = %d,mRight = %d,mKeyInMouseMode = %d\n",mLeft,mRight,mKeyInMouseMode);
+			//LOGD("mTop = %d,mBottom = %d\n",mTop,mBottom);
+			for(int i= 0;i < MAX_MOUSE_SIZE;i++)
+			{
+				//LOGD("mRealMouseDeviceId[%d] = %x\n",i,mRealMouseDeviceId[i]);
+				if(mRealMouseDeviceId[i] == tmpRawEvent->deviceId)
+				{
+					tmpRawEvent->deviceId  = mMouseDeviceId;
+				}
+			}
+			
+		    if(mKeyInMouseMode)
+		    {
+		        if(true)//tmpRawEvent->deviceId == mKeyDeviceId
+		        {
+		            if(rawEvent->type == EV_KEY)
+		            {
+		                if(rawEvent->scanCode == mLeft && rawEvent->value != 0)
+		                {
+		                     tmpRawEvent->deviceId  = mMouseDeviceId;
+		                     tmpRawEvent->type      = EV_REL;
+		                     tmpRawEvent->scanCode  = REL_X;
+		                     tmpRawEvent->value     = -mDistance;
+		                     
+		                     mKeySynced             = false;
+		                }
+		                else if(rawEvent->scanCode == mRight && rawEvent->value != 0)
+		                {
+		                     tmpRawEvent->deviceId  = mMouseDeviceId;
+		                     tmpRawEvent->type      = EV_REL;
+		                     tmpRawEvent->scanCode  = REL_X;
+		                     tmpRawEvent->value     = mDistance;
+		                     
+		                     mKeySynced             = false;
+		                }
+		                else if(rawEvent->scanCode == mTop && rawEvent->value != 0)
+		                {
+		                     tmpRawEvent->deviceId   = mMouseDeviceId;
+		                     tmpRawEvent->type      = EV_REL;
+		                     tmpRawEvent->scanCode  = REL_Y;
+		                     tmpRawEvent->value     = -mDistance;
+
+		                     mKeySynced             = false;
+		                }
+		                else if(rawEvent->scanCode == mBottom && rawEvent->value != 0)
+		                {
+		                     tmpRawEvent->deviceId  = mMouseDeviceId;
+		                     tmpRawEvent->type      = EV_REL;
+		                     tmpRawEvent->scanCode  = REL_Y;
+		                     tmpRawEvent->value     = mDistance;
+
+		                     mKeySynced             = false;
+		                }
+		                else if(rawEvent->scanCode == mLeftBtn)
+		                {
+		                     tmpRawEvent->deviceId  = mMouseDeviceId;
+		                     tmpRawEvent->type      = EV_KEY;
+		                     tmpRawEvent->scanCode  = BTN_LEFT;
+
+		                     mKeySynced             = false;
+		                }
+		                else if(rawEvent->scanCode == mMidBtn)
+		                {
+		                     tmpRawEvent->deviceId  = mMouseDeviceId;
+		                     tmpRawEvent->type      = EV_KEY;
+		                     tmpRawEvent->scanCode  = BTN_MIDDLE;
+
+		                     mKeySynced             = false;
+		                }
+		                else if(rawEvent->scanCode == mRightBtn)
+		                {
+		                     tmpRawEvent->deviceId  = mMouseDeviceId;
+		                     tmpRawEvent->type      = EV_KEY;
+		                     tmpRawEvent->scanCode  = BTN_RIGHT;
+		                     
+		                     mKeySynced             = false;
+		                }
+		            }
+		            else if(rawEvent->type == EV_SYN)
+		            {
+		                if(mKeySynced == false)
+		                {
+		                    tmpRawEvent->deviceId  = mMouseDeviceId;
+
+		                    mKeySynced = true;
+		                }
+		            }
+		        }
+		    }
+		}
+}
+
 
 void InputReader::processEventsForDeviceLocked(int32_t deviceId,
         const RawEvent* rawEvents, size_t count) {
@@ -654,6 +942,67 @@ int32_t InputReader::getStateLocked(int32_t deviceId, uint32_t sourceMask, int32
     return result;
 }
 
+void InputReader::keyEnterMouseMode()
+{
+    mKeyInMouseMode = true;
+	ssize_t deviceIndex = mDevices.indexOfKey(mMouseDeviceId);
+    if (deviceIndex < 0) 
+	{
+        LOGW("Discarding event for unknown deviceId %d.", mMouseDeviceId);
+        return;
+    }
+
+    InputDevice* device = mDevices.valueAt(deviceIndex);
+    if (device->isIgnored()) 
+	{
+        //LOGD("Discarding event for ignored deviceId %d.", deviceId);
+        return;
+    }
+
+	device->unfadePointer();
+}
+
+void InputReader::keyExitMouseMode()
+{
+    mKeyInMouseMode = false;
+	ssize_t deviceIndex = mDevices.indexOfKey(mMouseDeviceId);
+    if (deviceIndex < 0) 
+	{
+        LOGW("Discarding event for unknown deviceId %d.", mMouseDeviceId);
+        return;
+    }
+
+    InputDevice* device = mDevices.valueAt(deviceIndex);
+    if (device->isIgnored()) 
+	{
+        //LOGD("Discarding event for ignored deviceId %d.", deviceId);
+        return;
+    }
+
+	device->fadePointer();
+}
+
+void InputReader::keySetMouseDistance(int distance)
+{
+    mDistance = distance;
+}
+
+void InputReader::keySetMouseMoveCode(int left,int right,int top,int bottom)
+{
+    mLeft   = left;
+    mRight  = right;
+    mTop    = top;
+    mBottom = bottom;
+}
+
+void InputReader::keySetMouseBtnCode(int leftbtn,int midbtn,int rightbtn)
+{
+    mLeftBtn    = leftbtn;
+    mRightBtn   = midbtn;
+    mMidBtn     = midbtn;
+}
+
+
 bool InputReader::hasKeys(int32_t deviceId, uint32_t sourceMask,
         size_t numCodes, const int32_t* keyCodes, uint8_t* outFlags) {
     AutoMutex _l(mLock);
@@ -700,6 +1049,10 @@ void InputReader::requestRefreshConfiguration(uint32_t changes) {
     }
 }
 
+void InputReader::resetTouchCalibration()
+{    
+     resetTouch = true;
+}
 void InputReader::dump(String8& dump) {
     AutoMutex _l(mLock);
 
@@ -939,7 +1292,6 @@ void InputDevice::process(const RawEvent* rawEvents, size_t count) {
                 rawEvent->deviceId, rawEvent->type, rawEvent->scanCode, rawEvent->keyCode,
                 rawEvent->value, rawEvent->flags);
 #endif
-
         if (mDropUntilNextSync) {
             if (rawEvent->type == EV_SYN && rawEvent->scanCode == SYN_REPORT) {
                 mDropUntilNextSync = false;
@@ -1040,6 +1392,15 @@ void InputDevice::fadePointer() {
     }
 }
 
+void InputDevice::unfadePointer() {
+    size_t numMappers = mMappers.size();
+    for (size_t i = 0; i < numMappers; i++) {
+        InputMapper* mapper = mMappers[i];
+        mapper->unfadePointer();
+    }
+}
+
+
 void InputDevice::notifyReset(nsecs_t when) {
     NotifyDeviceResetArgs args(when, mId);
     mContext->getListener()->notifyDeviceReset(&args);
@@ -1072,6 +1433,7 @@ void CursorButtonAccumulator::clearButtons() {
     mBtnForward = 0;
     mBtnExtra = 0;
     mBtnTask = 0;
+	mBtnOther = 0;
 }
 
 void CursorButtonAccumulator::process(const RawEvent* rawEvent) {
@@ -1101,6 +1463,11 @@ void CursorButtonAccumulator::process(const RawEvent* rawEvent) {
         case BTN_TASK:
             mBtnTask = rawEvent->value;
             break;
+
+		default:
+			mBtnOther 		= rawEvent->value;
+            mOtherScanCode	= rawEvent->keyCode;
+			break;
         }
     }
 }
@@ -1111,7 +1478,10 @@ uint32_t CursorButtonAccumulator::getButtonState() const {
         result |= AMOTION_EVENT_BUTTON_PRIMARY;
     }
     if (mBtnRight) {
-        result |= AMOTION_EVENT_BUTTON_SECONDARY;
+        result |= AMOTION_EVENT_BUTTON_BACK;
+    }
+	if (mBtnOther) {
+        result |= AMOTION_EVENT_BUTTON_OTHER;
     }
     if (mBtnMiddle) {
         result |= AMOTION_EVENT_BUTTON_TERTIARY;
@@ -1710,6 +2080,10 @@ int32_t InputMapper::getMetaState() {
 void InputMapper::fadePointer() {
 }
 
+void InputMapper::unfadePointer() {
+}
+
+
 status_t InputMapper::getAbsoluteAxisInfo(int32_t axis, RawAbsoluteAxisInfo* axisInfo) {
     return getEventHub()->getAbsoluteAxisInfo(getDeviceId(), axis, axisInfo);
 }
@@ -1762,6 +2136,23 @@ KeyboardInputMapper::KeyboardInputMapper(InputDevice* device,
         uint32_t source, int32_t keyboardType) :
         InputMapper(device), mSource(source),
         mKeyboardType(keyboardType) {
+ mIsRepeatMode = true;
+
+	char property[PROPERTY_VALUE_MAX];
+	property_get("ro.sw.defaultusbwakeup", property, "1");
+	if(atoi(property) == 1)
+	{
+		mDefaultUsbWakeup = true;
+	}
+	else
+	{
+		mDefaultUsbWakeup = false;
+	}
+	for(int i= 0;i < MAX_KEYDOWNNUM;i++)
+	{
+		mCurrentDown[i]  = false;
+		mCurrentScanCode[i] = 0;
+	}
 }
 
 KeyboardInputMapper::~KeyboardInputMapper() {
@@ -1840,16 +2231,112 @@ void KeyboardInputMapper::reset(nsecs_t when) {
 }
 
 void KeyboardInputMapper::process(const RawEvent* rawEvent) {
-    switch (rawEvent->type) {
-    case EV_KEY: {
-        int32_t scanCode = rawEvent->scanCode;
-        if (isKeyboardOrGamepadKey(scanCode)) {
-            processKey(rawEvent->when, rawEvent->value != 0, rawEvent->keyCode, scanCode,
-                    rawEvent->flags);
-        }
-        break;
+    bool   find = false;
+    bool   down = false;
+    bool   currentindex = 0;
+    switch (rawEvent->type) 
+	{
+	    case EV_KEY: 
+		{
+			if(mIsRepeatMode)
+			{
+				if(rawEvent->value != 0)
+				{
+				  for(int i = 0;i < MAX_KEYDOWNNUM;i++)
+				  {
+				  	 if(mCurrentDown[i] == true)
+				  	 {
+				  	 		down = true;
+				  	 }
+				  }
+				  
+					if(down == false)
+					{
+						for(int i = 0;i < MAX_KEYDOWNNUM;i++)
+					  {
+					  	 if(mCurrentDown[i] == false)
+					  	 {
+					  	 		currentindex = i;
+					  	 		
+					  	 		break;
+					  	 }
+					  }
+					  
+					  mCurrentDown[currentindex] = true;
+					  mCurrentScanCode[currentindex] = rawEvent->scanCode;
+						goto processCurrentEvent;
+					}
+					else
+					{
+						for(int i = 0;i < MAX_KEYDOWNNUM;i++)
+					  {
+					  	 if(mCurrentScanCode[i] == rawEvent->scanCode)
+					  	 {
+					  	 		find = true;
+					  	 }
+					  }
+					  
+					  if(find == false)
+					  {
+					  	for(int i = 0;i < MAX_KEYDOWNNUM;i++)
+						  {
+						  	 if(mCurrentDown[i] == false)
+						  	 {
+						  	 		currentindex = i;
+						  	 		
+						  	 		break;
+						  	 }
+						  }
+						  
+						  mCurrentDown[currentindex] = true;
+					  	mCurrentScanCode[currentindex] = rawEvent->scanCode;
+							goto processCurrentEvent;
+					  }
+					}
+				}
+				else
+				{
+						for(int i = 0;i < MAX_KEYDOWNNUM;i++)
+					  {
+					  	 if(mCurrentScanCode[i] == rawEvent->scanCode)
+					  	 {
+					  	 		currentindex = i;
+					  	 		
+					  	 		find = true;
+					  	 		
+					  	 		break;
+					  	 }
+					  }
+					  
+					  if(find == true)
+					  {
+					  		mCurrentDown[currentindex] = false;
+					  		mCurrentScanCode[currentindex] = 0;
+					  		
+					  		goto processCurrentEvent;
+					  }
+				}
+			}
+			else
+			{
+				goto processCurrentEvent;
+			}
+	        
+	        break;
+	    }
     }
-    }
+
+	return ;
+	
+processCurrentEvent:
+	int32_t scanCode = rawEvent->scanCode;
+	if (isKeyboardOrGamepadKey(scanCode)) 
+	{
+		processKey(rawEvent->when, rawEvent->value != 0, rawEvent->keyCode, scanCode,
+				rawEvent->flags);
+	}
+
+	return ;
 }
 
 bool KeyboardInputMapper::isKeyboardOrGamepadKey(int32_t scanCode) {
@@ -1921,7 +2408,7 @@ void KeyboardInputMapper::processKey(nsecs_t when, bool down, int32_t keyCode,
     // each wake key individually.
     // TODO: Use the input device configuration to control this behavior more finely.
     if (down && getDevice()->isExternal()
-            && !(policyFlags & (POLICY_FLAG_WAKE | POLICY_FLAG_WAKE_DROPPED))) {
+            && !(policyFlags & (POLICY_FLAG_WAKE | POLICY_FLAG_WAKE_DROPPED)) && mDefaultUsbWakeup) {
         policyFlags |= POLICY_FLAG_WAKE_DROPPED;
     }
 
@@ -2071,8 +2558,8 @@ void CursorInputMapper::configure(nsecs_t when,
             mSource = AINPUT_SOURCE_MOUSE;
             mXPrecision = 1.0f;
             mYPrecision = 1.0f;
-            mXScale = 1.0f;
-            mYScale = 1.0f;
+            mXScale = 0.6f;//1.0f;
+            mYScale = 0.6f;//1.0f;
             mPointerController = getPolicy()->obtainPointerController(getDeviceId());
             break;
         case Parameters::MODE_NAVIGATION:
@@ -2260,6 +2747,10 @@ void CursorInputMapper::sync(nsecs_t when) {
     synthesizeButtonKeys(getContext(), AKEY_EVENT_ACTION_DOWN, when, getDeviceId(), mSource,
             policyFlags, lastButtonState, currentButtonState);
 
+	synthesizeButtonKey(getContext(), AKEY_EVENT_ACTION_DOWN, when, getDeviceId(), mSource, policyFlags,
+            lastButtonState, currentButtonState,
+            AMOTION_EVENT_BUTTON_OTHER, mCursorButtonAccumulator.mOtherScanCode);
+	
     // Send motion event.
     if (downChanged || moved || scrolled || buttonsChanged) {
         int32_t metaState = mContext->getGlobalMetaState();
@@ -2304,6 +2795,10 @@ void CursorInputMapper::sync(nsecs_t when) {
     synthesizeButtonKeys(getContext(), AKEY_EVENT_ACTION_UP, when, getDeviceId(), mSource,
             policyFlags, lastButtonState, currentButtonState);
 
+	synthesizeButtonKey(getContext(), AKEY_EVENT_ACTION_UP, when, getDeviceId(), mSource, policyFlags,
+            lastButtonState, currentButtonState,
+            AMOTION_EVENT_BUTTON_OTHER, mCursorButtonAccumulator.mOtherScanCode);
+
     mCursorMotionAccumulator.finishSync();
     mCursorScrollAccumulator.finishSync();
 }
@@ -2322,6 +2817,13 @@ void CursorInputMapper::fadePointer() {
     }
 }
 
+void CursorInputMapper::unfadePointer() {
+    if (mPointerController != NULL) {
+        mPointerController->unfade(PointerControllerInterface::TRANSITION_GRADUAL);
+    }
+}
+
+
 
 // --- TouchInputMapper ---
 
@@ -2329,6 +2831,7 @@ TouchInputMapper::TouchInputMapper(InputDevice* device) :
         InputMapper(device),
         mSource(0), mDeviceMode(DEVICE_MODE_DISABLED),
         mSurfaceOrientation(-1), mSurfaceWidth(-1), mSurfaceHeight(-1) {
+	mNeedCorrect = false;
 }
 
 TouchInputMapper::~TouchInputMapper() {
@@ -2462,6 +2965,296 @@ void TouchInputMapper::dump(String8& dump) {
     }
 }
 
+//get tp correct params
+int TouchInputMapper:: _get_str2int(char *saddr, int *flag)
+{
+    char            *src;
+    char            off;
+    unsigned int    value = 0;
+
+    src = saddr;
+    off = 0;         //0\u017d?0\u0153疲?\u017d?6\u0153? 2\u017d?0\u0153频腬u017e菏?
+    if((src[0] == '0') && ((src[1] == 'x') || (src[1] == 'X')))
+    {
+        src += 2;
+        off  = 1;
+    }
+    else if((src[0] == '-'))  {
+        src += 1;
+        off = 2;
+    }
+    if((!off) || (off == 2))
+    {
+        while(*src != '\0')
+        {
+            if((*src >= '0') && (*src <= '9'))
+            {
+                value = value * 10 + (*src - '0');
+                src ++;
+            }
+            else
+            {
+                return -1;
+            }
+        }
+        if(off == 2)
+        {
+            value = -value;
+        }
+    }
+    else if(off == 1)
+    {
+        while(*src != '\0')
+        {
+            if((*src >= '0') && (*src <= '9'))
+            {
+                value = value * 16 + (*src - '0');
+                src ++;
+            }
+            else if((*src >= 'A') && (*src <= 'F'))
+            {
+                value = value * 16 + (*src - 'A' + 10);
+                src ++;
+            }
+            else if((*src >= 'a') && (*src <= 'f'))
+            {
+                value = value * 16 + (*src - 'a' + 10);
+                src ++;;
+            }
+            else
+            {
+                return -1;
+            }
+        }
+    }
+
+    return value;
+}
+//\u017d撕袢eyname, itemname, 以\u0152癷temvalue，返回 0表蔦u0178失败，否则表蔦u0178当前\u017d\u0160理的砛u20ac度
+int TouchInputMapper::_get_item(char *saddr, char *name, char *value, unsigned int line_len)
+{
+    char            *src;
+    char            *dstname;
+    char            *dstvalue;
+    unsigned int    len;
+
+    src = saddr;
+    dstname = name;
+    dstvalue = value;
+
+    len = 0;
+    while(*src != '=')
+    {
+        if(*src != ' ')
+        {
+            *dstname++ = *src;
+            len ++;
+        }
+        src ++;
+        line_len --;
+        if(len > 256)
+        {
+            LOGD("key name too long\n");
+            return -1;
+        }
+    }
+    *dstname = '\0';
+    src ++;      //跳过 '='
+    line_len --;
+
+    len = 0;
+    while((*src != 0x0A) && (line_len--))
+    {
+        if(*src != ' ')
+        {
+            *dstvalue++ = *src;
+            len ++;
+        }
+        src ++;
+        if(len > 256)
+        {
+            LOGD("key name too long\n");
+            return -1;
+        }
+    }
+    *dstvalue = '\0';
+
+    return 0;
+}
+//\u017d撕祷氐鼻靶械某\u20ac度，用謀u017e针返回当前的意义
+/********************************************
+* flag = 0      //当前是注释行，或空行
+*      = 1      //当前是字段行
+*      = 2      //当前是子项行，属于字段的下一项
+*      = -1     //当前行不符合规范，出\u017d?*********************************************/
+int  TouchInputMapper::_get_line(char *daddr, int  *flag, unsigned int total_len)
+{
+    char            *src;
+    unsigned int    len = 0;
+
+    src = daddr;
+    if(*src == ';')          //注释行
+    {
+        *flag = 0;
+    }
+    else if((*src == 0x0A))     //回车行
+    {
+        *flag = 0;
+        len = 1;
+
+        return len;
+    }
+    else                     //子字段行
+    {
+        *flag = 1;
+    }
+
+    src ++;
+    len = 1;
+    while(--total_len)
+    {
+        //LOGD("*src = %x\n",*src);
+        if((*src == 0x0A))     
+        {
+            len += 1;
+            break;
+        }
+
+        src ++;
+        
+        len ++;
+        if(len >= 512)
+        {
+            *flag = -1;
+
+            return 0;
+        }
+    }
+
+    return len;
+}
+
+int TouchInputMapper::tp_getpara(int  *tp_para)
+{
+    FILE*           pfd = 0;
+    char            *data = 0;
+    char            *src = 0;
+    unsigned int   len, line_len, check_sum;
+    int             flag, value;
+    char    itemname[128], itemvalue[128];
+
+    pfd = fopen("/data/pointercal", "r+");            //只读
+    if(!pfd)                                                  
+    {
+        //LOGD("para data file not exist\n");
+        
+        goto _err_out;
+    }
+    fseek(pfd, 0, 2);
+    len = ftell(pfd);
+    fseek(pfd, 0, 0);
+
+    data = NULL;
+    if(!len)
+    {
+        LOGD("bad tp cfg\n");
+        goto _err_out;
+    }
+    data = (char *)malloc(len);
+    if(!data)
+    {
+        //LOGD("fail to malloc memory to store data\n");
+        goto _err_out;
+    }
+    fread(data, 1, len, pfd);
+    fclose(pfd);
+    pfd = NULL;
+    src  = data;
+
+    while(len)
+    {
+        line_len = _get_line(src, &flag, len);
+        LOGD("line_len = %d\n",line_len);
+        len -= line_len;
+        switch(flag)
+        {
+            case 0:              //注释行，回车行
+                src += line_len;
+                break;
+            case 1:
+                if(_get_item(src, itemname, itemvalue, line_len))
+                {
+                    LOGD("get item fail\n");
+
+                    goto _err_out;
+                }
+                src += line_len;
+                value = _get_str2int(itemvalue, 0);
+
+                if(!strcmp(itemname, "TP_PARA1"))
+                {
+                    tp_para[0] = value;
+                    //LOGD("value0 = %d\n",value);
+                }
+                else if(!strcmp(itemname, "TP_PARA2"))
+                {
+                    tp_para[1] = value;
+                    //LOGD("value1 = %d\n",value);
+                }
+                else if(!strcmp(itemname, "TP_PARA3"))
+                {
+                    tp_para[2] = value;
+                    //LOGD("value2 = %d\n",value);
+                }
+                else if(!strcmp(itemname, "TP_PARA4"))
+                {
+                    tp_para[3] = value;
+                    //LOGD("value3 = %d\n",value);
+                }
+                else if(!strcmp(itemname, "TP_PARA5"))
+                {
+                    tp_para[4] = value;
+                    //LOGD("value4 = %d\n",value);
+                }
+                else if(!strcmp(itemname, "TP_PARA6"))
+                {
+                    tp_para[5] = value;
+                    //LOGD("value5 = %d\n",value);
+                }
+                else if(!strcmp(itemname, "TP_PARA7"))
+                {
+                    tp_para[6] = value;
+                    //LOGD("value6 = %d\n",value);
+                }
+                break;
+            default:
+                goto _err_out;
+        }
+    }
+    free(data);
+
+    return 1;
+_err_out:
+    tp_para[0] = -28238;
+    tp_para[1] = 125;
+    tp_para[2] = 54543608;
+    tp_para[3] = 89;
+    tp_para[4] = -19020;
+    tp_para[5] = 34218656;
+    tp_para[6] = 65536;
+
+    if(data)
+    {
+        free(data);
+    }
+    if(pfd)
+    {
+        fclose(pfd);
+    }
+
+    return 0;
+}
+
 void TouchInputMapper::configure(nsecs_t when,
         const InputReaderConfiguration* config, uint32_t changes) {
     InputMapper::configure(when, config, changes);
@@ -2511,65 +3304,76 @@ void TouchInputMapper::configureParameters() {
     // Use the pointer presentation mode for devices that do not support distinct
     // multitouch.  The spot-based presentation relies on being able to accurately
     // locate two or more fingers on the touch pad.
-    mParameters.gestureMode = getEventHub()->hasInputProperty(getDeviceId(), INPUT_PROP_SEMI_MT)
+	if(getDeviceId() != 0x0fff0ffe)
+	{
+		mParameters.gestureMode = getEventHub()->hasInputProperty(getDeviceId(), INPUT_PROP_SEMI_MT)
             ? Parameters::GESTURE_MODE_POINTER : Parameters::GESTURE_MODE_SPOTS;
 
-    String8 gestureModeString;
-    if (getDevice()->getConfiguration().tryGetProperty(String8("touch.gestureMode"),
-            gestureModeString)) {
-        if (gestureModeString == "pointer") {
-            mParameters.gestureMode = Parameters::GESTURE_MODE_POINTER;
-        } else if (gestureModeString == "spots") {
-            mParameters.gestureMode = Parameters::GESTURE_MODE_SPOTS;
-        } else if (gestureModeString != "default") {
-            LOGW("Invalid value for touch.gestureMode: '%s'", gestureModeString.string());
-        }
-    }
+	    String8 gestureModeString;
+	    if (getDevice()->getConfiguration().tryGetProperty(String8("touch.gestureMode"),
+	            gestureModeString)) {
+	        if (gestureModeString == "pointer") {
+	            mParameters.gestureMode = Parameters::GESTURE_MODE_POINTER;
+	        } else if (gestureModeString == "spots") {
+	            mParameters.gestureMode = Parameters::GESTURE_MODE_SPOTS;
+	        } else if (gestureModeString != "default") {
+	            LOGV("Invalid value for touch.gestureMode: '%s'", gestureModeString.string());
+	        }
+	    }
 
-    if (getEventHub()->hasInputProperty(getDeviceId(), INPUT_PROP_DIRECT)) {
-        // The device is a touch screen.
-        mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_SCREEN;
-    } else if (getEventHub()->hasInputProperty(getDeviceId(), INPUT_PROP_POINTER)) {
-        // The device is a pointing device like a track pad.
-        mParameters.deviceType = Parameters::DEVICE_TYPE_POINTER;
-    } else if (getEventHub()->hasRelativeAxis(getDeviceId(), REL_X)
-            || getEventHub()->hasRelativeAxis(getDeviceId(), REL_Y)) {
-        // The device is a cursor device with a touch pad attached.
-        // By default don't use the touch pad to move the pointer.
-        mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_PAD;
-    } else {
-        // The device is a touch pad of unknown purpose.
-        mParameters.deviceType = Parameters::DEVICE_TYPE_POINTER;
-    }
+	    if (getEventHub()->hasInputProperty(getDeviceId(), INPUT_PROP_DIRECT)) {
+	        // The device is a touch screen.
+	        mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_SCREEN;
+	    } else if (getEventHub()->hasInputProperty(getDeviceId(), INPUT_PROP_POINTER)) {
+	        // The device is a pointing device like a track pad.
+	        mParameters.deviceType = Parameters::DEVICE_TYPE_POINTER;
+	    } else if (getEventHub()->hasRelativeAxis(getDeviceId(), REL_X)
+	            || getEventHub()->hasRelativeAxis(getDeviceId(), REL_Y)) {
+	        // The device is a cursor device with a touch pad attached.
+	        // By default don't use the touch pad to move the pointer.
+	        mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_PAD;
+	    } else {
+	        // The device is a touch pad of unknown purpose.
+	        mParameters.deviceType = Parameters::DEVICE_TYPE_POINTER;
+	    }
 
-    String8 deviceTypeString;
-    if (getDevice()->getConfiguration().tryGetProperty(String8("touch.deviceType"),
-            deviceTypeString)) {
-        if (deviceTypeString == "touchScreen") {
-            mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_SCREEN;
-        } else if (deviceTypeString == "touchPad") {
-            mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_PAD;
-        } else if (deviceTypeString == "pointer") {
-            mParameters.deviceType = Parameters::DEVICE_TYPE_POINTER;
-        } else if (deviceTypeString != "default") {
-            LOGW("Invalid value for touch.deviceType: '%s'", deviceTypeString.string());
-        }
-    }
+	    String8 deviceTypeString;
+	    if (getDevice()->getConfiguration().tryGetProperty(String8("touch.deviceType"),
+	            deviceTypeString)) {
+	        if (deviceTypeString == "touchScreen") {
+	            mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_SCREEN;
+	        } else if (deviceTypeString == "touchPad") {
+	            mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_PAD;
+	        } else if (deviceTypeString == "pointer") {
+	            mParameters.deviceType = Parameters::DEVICE_TYPE_POINTER;
+	        } else if (deviceTypeString != "default") {
+	            LOGV("touch.deviceType: '%s'", deviceTypeString.string());
+	        }
+	    }
 
-    mParameters.orientationAware = mParameters.deviceType == Parameters::DEVICE_TYPE_TOUCH_SCREEN;
-    getDevice()->getConfiguration().tryGetProperty(String8("touch.orientationAware"),
-            mParameters.orientationAware);
+	    mParameters.orientationAware = mParameters.deviceType == Parameters::DEVICE_TYPE_TOUCH_SCREEN;
+	    getDevice()->getConfiguration().tryGetProperty(String8("touch.orientationAware"),
+	            mParameters.orientationAware);
 
-    mParameters.associatedDisplayId = -1;
-    mParameters.associatedDisplayIsExternal = false;
-    if (mParameters.orientationAware
-            || mParameters.deviceType == Parameters::DEVICE_TYPE_TOUCH_SCREEN
-            || mParameters.deviceType == Parameters::DEVICE_TYPE_POINTER) {
-        mParameters.associatedDisplayIsExternal =
-                mParameters.deviceType == Parameters::DEVICE_TYPE_TOUCH_SCREEN
-                        && getDevice()->isExternal();
-        mParameters.associatedDisplayId = 0;
-    }
+	    mParameters.associatedDisplayId = -1;
+	    mParameters.associatedDisplayIsExternal = false;
+	    if (mParameters.orientationAware
+	            || mParameters.deviceType == Parameters::DEVICE_TYPE_TOUCH_SCREEN
+	            || mParameters.deviceType == Parameters::DEVICE_TYPE_POINTER) {
+	        mParameters.associatedDisplayIsExternal =
+	                mParameters.deviceType == Parameters::DEVICE_TYPE_TOUCH_SCREEN
+	                        && getDevice()->isExternal();
+	        mParameters.associatedDisplayId = 0;
+	    }
+	}
+	else
+	{
+		mParameters.gestureMode = Parameters::GESTURE_MODE_SPOTS;
+		mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_SCREEN;
+		mParameters.orientationAware = true;
+		mParameters.associatedDisplayId = 0;
+	}	
+	
 }
 
 void TouchInputMapper::dumpParameters(String8& dump) {
@@ -2645,11 +3449,16 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
     }
 
     // Ensure we have valid X and Y axes.
-    if (!mRawPointerAxes.x.valid || !mRawPointerAxes.y.valid) {
-        LOGW(INDENT "Touch device '%s' did not report support for X or Y axis!  "
-                "The device will be inoperable.", getDeviceName().string());
-        mDeviceMode = DEVICE_MODE_DISABLED;
-        return;
+    if (!mRawPointerAxes.x.valid || !mRawPointerAxes.y.valid)
+    {
+        //LOGW(INDENT "Touch device '%s' did not report support for X or Y axis!  "
+         //       "The device will be inoperable.", getDeviceName().string());
+        //mDeviceMode = DEVICE_MODE_DISABLED;
+        //return;
+        mRawPointerAxes.x.maxValue = 4095;
+		mRawPointerAxes.x.minValue = 0;
+		mRawPointerAxes.y.maxValue = 4095;
+		mRawPointerAxes.y.minValue = 0;
     }
 
     // Get associated display dimensions.
@@ -2679,7 +3488,16 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
         height = mRawPointerAxes.y.maxValue - mRawPointerAxes.y.minValue + 1;
         orientation = DISPLAY_ORIENTATION_0;
     }
-
+    char property[PROPERTY_VALUE_MAX];
+    if (property_get("ro.sf.hwrotation", property, NULL) > 0) {
+        //displayOrientation
+        switch (atoi(property)) {
+        case 270:
+             width =mAssociatedDisplayHeight ;
+             height = mAssociatedDisplayWidth;
+            break;
+        }
+    }
     // If moving between pointer modes, need to reset some state.
     bool deviceModeChanged;
     if (mDeviceMode != oldDeviceMode) {
@@ -3853,34 +4671,62 @@ void TouchInputMapper::cookPointerData() {
         default:
             distance = 0;
         }
-
+		//correct the one touch data here	
+		float adjust_x,adjust_y;
+		adjust_x = float(in.x - mRawPointerAxes.x.minValue) * mXScale;
+        adjust_y = float(in.y - mRawPointerAxes.y.minValue) * mYScale;		
+		if(mNeedCorrect == false)
+		{
+			int ret = tp_getpara(tp_para);
+			if(ret == 1)
+			{
+				adjust_x= ( tp_para[2] + tp_para[0]*adjust_x + tp_para[1]*adjust_x ) / tp_para[6];			
+			    adjust_y = ( tp_para[5] + tp_para[3]*adjust_y + tp_para[4]*adjust_y ) / tp_para[6];	
+				mNeedCorrect = true;
+			}
+			
+		}
+		else
+		{
+			if(resetTouch == true)
+			{
+				int ret = tp_getpara(tp_para);
+				if(ret == 1)
+				{
+					mNeedCorrect = true;
+					resetTouch = false;
+				}				
+			}
+			adjust_x = ( tp_para[2] + tp_para[0]*adjust_x + tp_para[1]*adjust_x ) / tp_para[6];			
+			adjust_y = ( tp_para[5] + tp_para[3]*adjust_y + tp_para[4]*adjust_y ) / tp_para[6];	
+		}
         // X and Y
         // Adjust coords for surface orientation.
         float x, y;
         switch (mSurfaceOrientation) {
         case DISPLAY_ORIENTATION_90:
-            x = float(in.y - mRawPointerAxes.y.minValue) * mYScale;
-            y = float(mRawPointerAxes.x.maxValue - in.x) * mXScale;
+            x = adjust_y;
+            y = mSurfaceWidth-adjust_x;
             orientation -= M_PI_2;
             if (orientation < - M_PI_2) {
                 orientation += M_PI;
             }
             break;
         case DISPLAY_ORIENTATION_180:
-            x = float(mRawPointerAxes.x.maxValue - in.x) * mXScale;
-            y = float(mRawPointerAxes.y.maxValue - in.y) * mYScale;
+            x = mSurfaceWidth - adjust_x;
+            y = mSurfaceHeight - adjust_y;
             break;
         case DISPLAY_ORIENTATION_270:
-            x = float(mRawPointerAxes.y.maxValue - in.y) * mYScale;
-            y = float(in.x - mRawPointerAxes.x.minValue) * mXScale;
+            x = mSurfaceHeight - adjust_y;
+            y = adjust_x;
             orientation += M_PI_2;
             if (orientation > M_PI_2) {
                 orientation -= M_PI;
             }
             break;
         default:
-            x = float(in.x - mRawPointerAxes.x.minValue) * mXScale;
-            y = float(in.y - mRawPointerAxes.y.minValue) * mYScale;
+            x = adjust_x;
+            y = adjust_y;
             break;
         }
 
@@ -5584,6 +6430,11 @@ void MultiTouchInputMapper::syncTouch(nsecs_t when, bool* outHavePointerIds) {
         if (!inSlot->isInUse()) {
             continue;
         }
+        
+        if((inSlot->getX() == 0) && (inSlot->getY() == 0))
+        {
+        	continue;
+        }
 
         if (outCount >= MAX_POINTERS) {
 #if DEBUG_POINTERS
@@ -5618,7 +6469,8 @@ void MultiTouchInputMapper::syncTouch(nsecs_t when, bool* outHavePointerIds) {
         bool isHovering = mTouchButtonAccumulator.getToolType() != AMOTION_EVENT_TOOL_TYPE_MOUSE
                 && (mTouchButtonAccumulator.isHovering()
                         || (mRawPointerAxes.pressure.valid && inSlot->getPressure() <= 0));
-        outPointer.isHovering = isHovering;
+        //outPointer.isHovering = isHovering;
+        outPointer.isHovering = false;
 
         // Assign pointer id using tracking id if available.
         if (*outHavePointerIds) {
@@ -5644,7 +6496,8 @@ void MultiTouchInputMapper::syncTouch(nsecs_t when, bool* outHavePointerIds) {
             } else {
                 outPointer.id = id;
                 mCurrentRawPointerData.idToIndex[id] = outCount;
-                mCurrentRawPointerData.markIdBit(id, isHovering);
+                //mCurrentRawPointerData.markIdBit(id, isHovering);
+                mCurrentRawPointerData.markIdBit(id, outPointer.isHovering);
                 newPointerIdBits.markBit(id);
             }
         }

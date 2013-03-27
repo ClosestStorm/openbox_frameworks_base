@@ -40,8 +40,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
-import java.text.Collator;
 
 /**
  * The Media provider contains meta data for all available media on both internal
@@ -66,7 +64,10 @@ public final class MediaStore {
     /**
      * Activity Action: Launch a music player.
      * The activity should be able to play, browse, or manipulate music files stored on the device.
+     *
+     * @deprecated Use {@link android.content.Intent#CATEGORY_APP_MUSIC} instead.
      */
+    @Deprecated
     @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String INTENT_ACTION_MUSIC_PLAYER = "android.intent.action.MUSIC_PLAYER";
 
@@ -137,6 +138,18 @@ public final class MediaStore {
      * This is a boolean property that specifies whether or not to show action icons.
      */
     public static final String EXTRA_SHOW_ACTION_ICONS = "android.intent.extra.showActionIcons";
+    
+    //by Bevis, for VideoPlayer to create playlist
+    public static final String PLAYLIST_TYPE = "android.intent.extra.playListType";
+
+    public static final String PLAYLIST_TYPE_CUR_FOLDER = "curFolder";
+    public static final String PLAYLIST_TYPE_MEDIA_PROVIDER = "mediaProvider";
+
+    /* add by Gary. start {{----------------------------------- */
+    /* 2012-4-27 */
+    /* for VideoPlayer to play BD in folder play mode. This is a boolean property */
+    public static final String EXTRA_BD_FOLDER_PLAY_MODE = "android.intent.extra.bdfolderplaymode";
+    /* add by Gary. end   -----------------------------------}} */
 
     /**
      * The name of the Intent-extra used to control the onCompletion behavior of a MovieView.

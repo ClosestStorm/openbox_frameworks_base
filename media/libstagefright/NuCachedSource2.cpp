@@ -187,6 +187,7 @@ NuCachedSource2::NuCachedSource2(
       mCache(new PageCache(kPageSize)),
       mCacheOffset(0),
       mFinalStatus(OK),
+      mForceReconnect(false),
       mLastAccessPos(0),
       mFetching(true),
       mLastFetchTimeUs(-1),
@@ -230,7 +231,16 @@ NuCachedSource2::~NuCachedSource2() {
 status_t NuCachedSource2::getEstimatedBandwidthKbps(int32_t *kbps) {
     if (mSource->flags() & kIsHTTPBasedSource) {
         HTTPBase* source = static_cast<HTTPBase *>(mSource.get());
-        return source->getEstimatedBandwidthKbps(kbps);
+        if(source->estimateBandwidth(kbps) == true)
+        {
+        	*kbps /= 1000;
+        	return OK;
+        }
+        else
+        {
+        	*kbps = 0;
+        	return UNKNOWN_ERROR;
+        }
     }
     return ERROR_UNSUPPORTED;
 }
@@ -289,6 +299,11 @@ void NuCachedSource2::fetchInternal() {
             --mNumRetriesLeft;
 
             reconnect = true;
+        }
+        else if (mForceReconnect) {
+        	LOGD("ForceReconnect!!!");
+        	mForceReconnect = false;
+        	reconnect = true;
         }
     }
 
@@ -374,7 +389,7 @@ void NuCachedSource2::onFetch() {
         }
     } else {
         Mutex::Autolock autoLock(mLock);
-        restartPrefetcherIfNecessary_l();
+        restartPrefetcherIfNecessary_l(true);
     }
 
     int64_t delayUs;
@@ -536,7 +551,7 @@ ssize_t NuCachedSource2::readInternal(off64_t offset, void *data, size_t size) {
 
     if (offset < mCacheOffset
             || offset >= (off64_t)(mCacheOffset + mCache->totalSize())) {
-        static const off64_t kPadding = 256 * 1024;
+        static const off64_t kPadding = 0; //256 * 1024;
 
         // In the presence of multiple decoded streams, once of them will
         // trigger this seek request, the other one will request data "nearby"
@@ -584,12 +599,16 @@ status_t NuCachedSource2::seekInternal_l(off64_t offset) {
         return OK;
     }
 
-    LOGI("new range: offset= %lld", offset);
+    //LOGI("new range: offset= %lld", offset);
 
     mCacheOffset = offset;
 
     size_t totalSize = mCache->totalSize();
     CHECK_EQ(mCache->releaseFromStart(totalSize), totalSize);
+
+    if(mFinalStatus < 0) {
+       	mForceReconnect = true;
+    }
 
     mFinalStatus = OK;
     mFetching = true;

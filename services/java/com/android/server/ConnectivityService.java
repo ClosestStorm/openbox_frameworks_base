@@ -413,7 +413,7 @@ public class ConnectivityService extends IConnectivityManager.Stub {
                             n.type);
                     continue;
                 }
-                if (mRadioAttributes[n.radio] == null) {
+                if ((mRadioAttributes[n.radio] == null) && (n.type != ConnectivityManager.TYPE_ETHERNET)) {
                     loge("Error in networkAttributes - ignoring attempt to use undefined " +
                             "radio " + n.radio + " in network type " + n.type);
                     continue;
@@ -761,7 +761,17 @@ private NetworkStateTracker makeWimaxStateTracker() {
     public NetworkInfo getActiveNetworkInfo() {
         enforceAccessPermission();
         final int uid = Binder.getCallingUid();
-        return getNetworkInfo(mActiveDefaultNetwork, uid);
+        NetworkInfo info = getNetworkInfo(mActiveDefaultNetwork, uid);
+		/*  Cheat ethernet to wifi --Begin-- add by shugeLinux@gmail.com  */
+		if((info != null) && (info.getType() == ConnectivityManager.TYPE_ETHERNET)){
+			NetworkInfo notTrueWifi = mNetTrackers[ConnectivityManager.TYPE_WIFI].getNetworkInfo();
+			notTrueWifi.setDetailedState(info.getDetailedState()
+								,info.getReason(), info.getExtraInfo());
+			notTrueWifi.setIsAvailable(info.isAvailable());
+			return notTrueWifi;
+		}
+		/*  Cheat ethernet to wifi --End-- add by shugeLinux@gmail.com  */
+		return info;
     }
 
     @Override
@@ -774,7 +784,18 @@ private NetworkStateTracker makeWimaxStateTracker() {
     public NetworkInfo getNetworkInfo(int networkType) {
         enforceAccessPermission();
         final int uid = Binder.getCallingUid();
-        return getNetworkInfo(networkType, uid);
+        NetworkInfo info = getNetworkInfo(networkType, uid);
+		/*  Cheat ethernet to wifi --Begin-- add by shugeLinux@gmail.com  */
+		if((info != null)
+				&& (mActiveDefaultNetwork == ConnectivityManager.TYPE_ETHERNET)
+				&& (info.getType() == ConnectivityManager.TYPE_WIFI)){
+			NetworkInfo ethInfo = mNetTrackers[ConnectivityManager.TYPE_ETHERNET].getNetworkInfo();
+			info.setDetailedState(ethInfo.getDetailedState()
+							,ethInfo.getReason(), ethInfo.getExtraInfo());
+			info.setIsAvailable(ethInfo.isAvailable());
+		}
+		/*  Cheat ethernet to wifi --End-- add by shugeLinux@gmail.com  */
+		return info;
     }
 
     private NetworkInfo getNetworkInfo(int networkType, int uid) {
@@ -1031,9 +1052,14 @@ private NetworkStateTracker makeWimaxStateTracker() {
                 if ((ni.isConnectedOrConnecting() == true) &&
                         !network.isTeardownRequested()) {
                     if (ni.isConnected() == true) {
-                        // add the pid-specific dns
-                        handleDnsConfigurationChange(usedNetworkType);
-                        if (VDBG) log("special network already active");
+                        final long token = Binder.clearCallingIdentity();
+                        try {
+                            // add the pid-specific dns
+                            handleDnsConfigurationChange(usedNetworkType);
+                            if (VDBG) log("special network already active");
+                        } finally {
+                            Binder.restoreCallingIdentity(token);
+                        }
                         return Phone.APN_ALREADY_ACTIVE;
                     }
                     if (VDBG) log("special network already connecting");
@@ -1221,6 +1247,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
         }
 
         if (!ConnectivityManager.isNetworkTypeValid(networkType)) {
+            if (DBG) log("requestRouteToHostAddress on invalid network: " + networkType);
             return false;
         }
         NetworkStateTracker tracker = mNetTrackers[networkType];
@@ -1233,11 +1260,16 @@ private NetworkStateTracker makeWimaxStateTracker() {
             }
             return false;
         }
+        final long token = Binder.clearCallingIdentity();
         try {
             InetAddress addr = InetAddress.getByAddress(hostAddress);
             LinkProperties lp = tracker.getLinkProperties();
             return addRouteToAddress(lp, addr);
-        } catch (UnknownHostException e) {}
+        } catch (UnknownHostException e) {
+            if (DBG) log("requestRouteToHostAddress got " + e.toString());
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
         return false;
     }
 
@@ -1277,7 +1309,10 @@ private NetworkStateTracker makeWimaxStateTracker() {
 
     private boolean modifyRoute(String ifaceName, LinkProperties lp, RouteInfo r, int cycleCount,
             boolean doAdd, boolean toDefaultTable) {
-        if ((ifaceName == null) || (lp == null) || (r == null)) return false;
+        if ((ifaceName == null) || (lp == null) || (r == null)) {
+            if (DBG) log("modifyRoute got unexpected null: " + ifaceName + ", " + lp + ", " + r);
+            return false;
+        }
 
         if (cycleCount > MAX_HOSTROUTE_CYCLE_COUNT) {
             loge("Error modifying route - too much recursion");
@@ -1309,7 +1344,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
                 }
             } catch (Exception e) {
                 // never crash - catch them all
-                if (VDBG) loge("Exception trying to add a route: " + e);
+                if (DBG) loge("Exception trying to add a route: " + e);
                 return false;
             }
         } else {
@@ -1323,7 +1358,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
                         mNetd.removeRoute(ifaceName, r);
                     } catch (Exception e) {
                         // never crash - catch them all
-                        if (VDBG) loge("Exception trying to remove a route: " + e);
+                        if (DBG) loge("Exception trying to remove a route: " + e);
                         return false;
                     }
                 } else {
@@ -1335,7 +1370,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
                     mNetd.removeSecondaryRoute(ifaceName, r);
                 } catch (Exception e) {
                     // never crash - catch them all
-                    if (VDBG) loge("Exception trying to remove a route: " + e);
+                    if (DBG) loge("Exception trying to remove a route: " + e);
                     return false;
                 }
             }
@@ -1430,6 +1465,12 @@ private NetworkStateTracker makeWimaxStateTracker() {
                 log(mNetTrackers[ConnectivityManager.TYPE_MOBILE].toString() + enabled);
             }
             mNetTrackers[ConnectivityManager.TYPE_MOBILE].setUserDataEnable(enabled);
+        }
+        if (mNetTrackers[ConnectivityManager.TYPE_WIMAX] != null) {
+            if (VDBG) {
+                log(mNetTrackers[ConnectivityManager.TYPE_WIMAX].toString() + enabled);
+            }
+            mNetTrackers[ConnectivityManager.TYPE_WIMAX].setUserDataEnable(enabled);
         }
     }
 
@@ -1998,7 +2039,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
                         mNetd.removeRoute(ifaceName, r);
                     } catch (Exception e) {
                         // never crash - catch them all
-                        if (VDBG) loge("Exception trying to remove a route: " + e);
+                        if (DBG) loge("Exception trying to remove a route: " + e);
                     }
                 }
             }
@@ -2212,7 +2253,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
                 mNetd.setDnsServersForInterface(iface, NetworkUtils.makeStrings(dnses));
                 mNetd.setDefaultInterfaceForDns(iface);
             } catch (Exception e) {
-                if (VDBG) loge("exception setting default dns interface: " + e);
+                if (DBG) loge("exception setting default dns interface: " + e);
             }
         }
         if (!domains.equals(SystemProperties.get("net.dns.search"))) {
@@ -2242,7 +2283,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
                     mNetd.setDnsServersForInterface(p.getInterfaceName(),
                             NetworkUtils.makeStrings(dnses));
                 } catch (Exception e) {
-                    if (VDBG) loge("exception setting dns servers: " + e);
+                    if (DBG) loge("exception setting dns servers: " + e);
                 }
                 // set per-pid dns for attached secondary nets
                 List pids = mNetRequestersPids[netType];

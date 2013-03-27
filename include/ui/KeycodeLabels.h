@@ -231,6 +231,28 @@ static const KeycodeLabel KEYCODES[] = {
     { "LANGUAGE_SWITCH", 204 },
     { "MANNER_MODE", 205 },
     { "3D_MODE", 206 },
+    { "CONTACTS", 207 },
+    { "CALENDAR", 208 },
+    { "MUSIC", 209 },
+    { "CALCULATOR", 210 },
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-10-27 */
+    /* add some new keys for TVD */
+	{ "TV_SYSTEM", 10000 },
+	{ "GOTO", 10001 },
+	{ "SUBTITLE", 10002 },
+	{ "AUDIO", 10003 },
+	{ "ZOOM", 10004 },
+	{ "HELP", 10005 },
+	{ "FAVOURITE", 10006 },
+	{ "LOOP", 10007 },
+	{ "EXPAND", 10008 },
+	{ "MOUSE", 10009 },
+	{ "MOVIE", 10010 },
+	{ "APPS", 10011 },
+	{ "BROWSER", 10012 },
+	{ "SCREENSHOT", 10013 },
+    /* add by Gary. end   -----------------------------------}} */
 
     // NOTE: If you add a new keycode here you must also add it to several other files.
     //       Refer to frameworks/base/core/java/android/view/KeyEvent.java for the full list.

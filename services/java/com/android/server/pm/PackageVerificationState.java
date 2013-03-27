@@ -28,7 +28,7 @@ import android.util.SparseBooleanArray;
  * package to be considered verified. If there are zero sufficient verifiers,
  * then package verification is considered complete.
  */
-class PackageVerificationState {
+ public class PackageVerificationState {
     private final InstallArgs mArgs;
 
     private final SparseBooleanArray mSufficientVerifierUids;

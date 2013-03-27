@@ -73,8 +73,12 @@ public class MediaFile {
     
     // More video file types
     public static final int FILE_TYPE_MP2PS   = 200;
+    public static final int FILE_TYPE_CEDARV  = 201;
     private static final int FIRST_VIDEO_FILE_TYPE2 = FILE_TYPE_MP2PS;
-    private static final int LAST_VIDEO_FILE_TYPE2 = FILE_TYPE_MP2PS;
+    private static final int LAST_VIDEO_FILE_TYPE2 = FILE_TYPE_CEDARV;
+    
+    // More audio file types
+    private static final int FILE_TYPE_CEDARA = 300;
 
     // Image file types
     public static final int FILE_TYPE_JPEG    = 31;
@@ -176,14 +180,24 @@ public class MediaFile {
         addFileType("WAV", FILE_TYPE_WAV, "audio/x-wav", MtpConstants.FORMAT_WAV);
         addFileType("AMR", FILE_TYPE_AMR, "audio/amr");
         addFileType("AWB", FILE_TYPE_AWB, "audio/amr-wb");
-        if (isWMAEnabled()) {
+        //if (isWMAEnabled()) {
             addFileType("WMA", FILE_TYPE_WMA, "audio/x-ms-wma", MtpConstants.FORMAT_WMA);
-        }
+        //}
         addFileType("OGG", FILE_TYPE_OGG, "application/ogg", MtpConstants.FORMAT_OGG);
         addFileType("OGA", FILE_TYPE_OGG, "application/ogg", MtpConstants.FORMAT_OGG);
         addFileType("AAC", FILE_TYPE_AAC, "audio/aac", MtpConstants.FORMAT_AAC);
         addFileType("AAC", FILE_TYPE_AAC, "audio/aac-adts", MtpConstants.FORMAT_AAC);
         addFileType("MKA", FILE_TYPE_MKA, "audio/x-matroska");
+        
+        addFileType("APE", FILE_TYPE_CEDARA, "audio/cedara");
+        //addFileType("FLAC",FILE_TYPE_CEDARA, "audio/cedara");
+        addFileType("AC3", FILE_TYPE_CEDARA, "audio/cedara");
+        addFileType("DTS", FILE_TYPE_CEDARA, "audio/cedara");
+        addFileType("OMG", FILE_TYPE_CEDARA, "audio/cedara");
+        addFileType("M4R", FILE_TYPE_CEDARA, "audio/cedara");
+        addFileType("RA",  FILE_TYPE_CEDARA, "audio/cedara");
+        //addFileType("MP1", FILE_TYPE_CEDARA, "audio/cedara");
+        //addFileType("MP2", FILE_TYPE_CEDARA, "audio/cedara");
  
         addFileType("MID", FILE_TYPE_MID, "audio/midi");
         addFileType("MIDI", FILE_TYPE_MID, "audio/midi");
@@ -206,12 +220,25 @@ public class MediaFile {
         addFileType("MKV", FILE_TYPE_MKV, "video/x-matroska");
         addFileType("WEBM", FILE_TYPE_WEBM, "video/webm");
         addFileType("TS", FILE_TYPE_MP2TS, "video/mp2ts");
+		addFileType("TP", FILE_TYPE_MP2TS, "video/mp2ts");
+		addFileType("M2TS",FILE_TYPE_MP2TS, "video/mp2ts");
         addFileType("AVI", FILE_TYPE_AVI, "video/avi");
+        
+		addFileType("RMVB",FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("RM",  FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("AVI", FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("MOV", FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("FLV", FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("F4V", FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("VOB", FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("PMP", FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("3DM", FILE_TYPE_CEDARV, "video/cedarx");
+		addFileType("3DV", FILE_TYPE_CEDARV, "video/cedarx");
 
-        if (isWMVEnabled()) {
+        //if (isWMVEnabled()) {
             addFileType("WMV", FILE_TYPE_WMV, "video/x-ms-wmv", MtpConstants.FORMAT_WMV);
             addFileType("ASF", FILE_TYPE_ASF, "video/x-ms-asf");
-        }
+        //}
 
         addFileType("JPG", FILE_TYPE_JPEG, "image/jpeg", MtpConstants.FORMAT_EXIF_JPEG);
         addFileType("JPEG", FILE_TYPE_JPEG, "image/jpeg", MtpConstants.FORMAT_EXIF_JPEG);
@@ -248,7 +275,8 @@ public class MediaFile {
         return ((fileType >= FIRST_AUDIO_FILE_TYPE &&
                 fileType <= LAST_AUDIO_FILE_TYPE) ||
                 (fileType >= FIRST_MIDI_FILE_TYPE &&
-                fileType <= LAST_MIDI_FILE_TYPE));
+                fileType <= LAST_MIDI_FILE_TYPE) ||
+                fileType == FILE_TYPE_CEDARA);
     }
 
     public static boolean isVideoFileType(int fileType) {

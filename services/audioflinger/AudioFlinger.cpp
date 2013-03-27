@@ -779,6 +779,22 @@ status_t AudioFlinger::setParameters(int ioHandle, const String8& keyValuePairs)
                 mBtNrecIsOff = btNrecIsOff;
             }
         }
+
+		// add for switch audio out mode; switch raw data out;
+		if (param.get(String8(AUDIO_PARAMETER_STREAM_ROUTING), value) == NO_ERROR
+			|| param.get(String8(AUDIO_PARAMETER_RAW_DATA_OUT), value) == NO_ERROR
+			|| param.get(String8(AUDIO_PARAMETER_DEVICES_OUT_ACTIVE), value) == NO_ERROR) {
+			for (uint32_t i = 0; i < mPlaybackThreads.size(); i++) {
+				mPlaybackThreads.valueAt(i)->setParameters(keyValuePairs);
+			}
+		}
+
+		if (param.get(String8(AUDIO_PARAMETER_DEVICES_IN_ACTIVE), value) == NO_ERROR) {
+			for (uint32_t i = 0; i < mRecordThreads.size(); i++) {
+				mRecordThreads.valueAt(i)->setParameters(keyValuePairs);
+			}
+		}
+
         return final_result;
     }
 
@@ -1816,11 +1832,23 @@ audio_stream_t* AudioFlinger::PlaybackThread::stream()
     return &mOutput->stream->common;
 }
 
+uint32_t AudioFlinger::PlaybackThread::activeSleepTimeUs()
+{
+    // A2DP output latency is not due only to buffering capacity. It also reflects encoding,
+    // decoding and transfer time. So sleeping for half of the latency would likely cause
+    // underruns
+    if (audio_is_a2dp_device((audio_devices_t)mDevice)) {
+        return (uint32_t)((uint32_t)((mFrameCount * 1000) / mSampleRate) * 1000);
+    } else {
+        return (uint32_t)(mOutput->stream->get_latency(mOutput->stream) * 1000) / 2;
+    }
+}
+
 // ----------------------------------------------------------------------------
 
 AudioFlinger::MixerThread::MixerThread(const sp<AudioFlinger>& audioFlinger, AudioStreamOut* output, int id, uint32_t device)
     :   PlaybackThread(audioFlinger, output, id, device),
-        mAudioMixer(0)
+        mAudioMixer(0), mPrevMixerStatus(MIXER_IDLE)
 {
     mType = ThreadBase::MIXER;
     mAudioMixer = new AudioMixer(mFrameCount, mSampleRate);
@@ -1933,6 +1961,7 @@ bool AudioFlinger::MixerThread::threadLoop()
                     LOGV("MixerThread %p TID %d waking up\n", this, gettid());
                     acquireWakeLock_l();
 
+                    mPrevMixerStatus = MIXER_IDLE;
                     if (mMasterMute == false) {
                         char value[PROPERTY_VALUE_MAX];
                         property_get("ro.audio.silent", value, "0");
@@ -1960,11 +1989,14 @@ bool AudioFlinger::MixerThread::threadLoop()
         if (LIKELY(mixerStatus == MIXER_TRACKS_READY)) {
             // mix buffers...
             mAudioMixer->process();
-            sleepTime = 0;
-            // increase sleep time progressively when application underrun condition clears
-            if (sleepTimeShift > 0) {
+            // increase sleep time progressively when application underrun condition clears.
+            // Only increase sleep time if the mixer is ready for two consecutive times to avoid
+            // that a steady state of alternating ready/not ready conditions keeps the sleep time
+            // such that we would underrun the audio HAL.
+            if ((sleepTime == 0) && (sleepTimeShift > 0)) {
                 sleepTimeShift--;
             }
+            sleepTime = 0;
             standbyTime = systemTime() + kStandbyTimeInNsecs;
             //TODO: delay standby when effects have a tail
         } else {
@@ -2091,15 +2123,23 @@ uint32_t AudioFlinger::MixerThread::prepareTracks_l(const SortedVector< wp<Track
         // make sure that we have enough frames to mix one full buffer.
         // enforce this condition only once to enable draining the buffer in case the client
         // app does not call stop() and relies on underrun to stop:
-        // hence the test on (track->mRetryCount >= kMaxTrackRetries) meaning the track was mixed
+        // hence the test on (mPrevMixerStatus == MIXER_TRACKS_READY) meaning the track was mixed
         // during last round
         uint32_t minFrames = 1;
         if (!track->isStopped() && !track->isPausing() &&
-                (track->mRetryCount >= kMaxTrackRetries)) {
+                (mPrevMixerStatus == MIXER_TRACKS_READY)) {
             if (t->sampleRate() == (int)mSampleRate) {
                 minFrames = mFrameCount;
             } else {
-                minFrames = (mFrameCount * t->sampleRate()) / mSampleRate + 1;
+                // +1 for rounding and +1 for additional sample needed for interpolation
+                minFrames = (mFrameCount * t->sampleRate()) / mSampleRate + 1 + 1;
+                // add frames already consumed but not yet released by the resampler
+                // because cblk->framesReady() will  include these frames
+                minFrames += mAudioMixer->getUnreleasedFrames(track->name());
+                // the minimum track buffer size is normally twice the number of frames necessary
+                // to fill one buffer and the resampler should not leave more than one buffer worth
+                // of unreleased frames after each pass, but just in case...
+                LOG_ASSERT(minFrames <= cblk->frameCount);
             }
         }
         if ((cblk->framesReady() >= minFrames) && track->isReady() &&
@@ -2209,7 +2249,13 @@ uint32_t AudioFlinger::MixerThread::prepareTracks_l(const SortedVector< wp<Track
 
             // reset retry count
             track->mRetryCount = kMaxTrackRetries;
-            mixerStatus = MIXER_TRACKS_READY;
+            // If one track is ready, set the mixer ready if:
+            //  - the mixer was not ready during previous round OR
+            //  - no other track is not ready
+            if (mPrevMixerStatus != MIXER_TRACKS_READY ||
+                    mixerStatus != MIXER_TRACKS_ENABLED) {
+                mixerStatus = MIXER_TRACKS_READY;
+            }
         } else {
             //LOGV("track %d u=%08x, s=%08x [NOT READY] on thread %p", track->name(), cblk->user, cblk->server, this);
             if (track->isStopped()) {
@@ -2227,7 +2273,11 @@ uint32_t AudioFlinger::MixerThread::prepareTracks_l(const SortedVector< wp<Track
                     tracksToRemove->add(track);
                     // indicate to client process that the track was disabled because of underrun
                     android_atomic_or(CBLK_DISABLED_ON, &cblk->flags);
-                } else if (mixerStatus != MIXER_TRACKS_READY) {
+                // If one track is not ready, mark the mixer also not ready if:
+                //  - the mixer was ready during previous round OR
+                //  - no other track is ready
+                } else if (mPrevMixerStatus == MIXER_TRACKS_READY ||
+                                mixerStatus != MIXER_TRACKS_READY) {
                     mixerStatus = MIXER_TRACKS_ENABLED;
                 }
             }
@@ -2261,6 +2311,7 @@ uint32_t AudioFlinger::MixerThread::prepareTracks_l(const SortedVector< wp<Track
         memset(mMixBuffer, 0, mFrameCount * mChannelCount * sizeof(int16_t));
     }
 
+    mPrevMixerStatus = mixerStatus;
     return mixerStatus;
 }
 
@@ -2420,11 +2471,6 @@ status_t AudioFlinger::MixerThread::dumpInternals(int fd, const Vector<String16>
     result.append(buffer);
     write(fd, result.string(), result.size());
     return NO_ERROR;
-}
-
-uint32_t AudioFlinger::MixerThread::activeSleepTimeUs()
-{
-    return (uint32_t)(mOutput->stream->get_latency(mOutput->stream) * 1000) / 2;
 }
 
 uint32_t AudioFlinger::MixerThread::idleSleepTimeUs()
@@ -2893,7 +2939,7 @@ uint32_t AudioFlinger::DirectOutputThread::activeSleepTimeUs()
 {
     uint32_t time;
     if (audio_is_linear_pcm(mFormat)) {
-        time = (uint32_t)(mOutput->stream->get_latency(mOutput->stream) * 1000) / 2;
+        time = PlaybackThread::activeSleepTimeUs();
     } else {
         time = 10000;
     }
@@ -3001,6 +3047,7 @@ bool AudioFlinger::DuplicatingThread::threadLoop()
                     LOGV("DuplicatingThread %p TID %d waking up\n", this, gettid());
                     acquireWakeLock_l();
 
+                    mPrevMixerStatus = MIXER_IDLE;
                     if (mMasterMute == false) {
                         char value[PROPERTY_VALUE_MAX];
                         property_get("ro.audio.silent", value, "0");

@@ -117,6 +117,13 @@ public class Dialog implements DialogInterface, Window.Callback,
     private final Runnable mDismissAction = new Runnable() {
         public void run() {
             dismissDialog();
+			try
+			{
+					Thread.sleep(10);
+			}
+			catch (Exception e)
+			{			
+			}			
         }
     };
 

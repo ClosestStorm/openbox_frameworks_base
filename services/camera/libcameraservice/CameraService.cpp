@@ -70,6 +70,9 @@ static int getCallingUid() {
 // should be ok for now.
 static CameraService *gCameraService;
 
+// define and initialize static class member
+int CameraService::mOverlayScreen = MASTER_SCREEN;
+
 CameraService::CameraService()
 :mSoundRef(0), mModule(0)
 {
@@ -97,15 +100,16 @@ void CameraService::onFirstRef()
             setCameraFree(i);
         }
     }
-
-    // Read the system property to determine if we have to use the
-    // AUDIO_STREAM_ENFORCED_AUDIBLE type.
-    char value[PROPERTY_VALUE_MAX];
-    property_get("ro.camera.sound.forced", value, "0");
-    if (strcmp(value, "0") != 0) {
-        mAudioStreamType = AUDIO_STREAM_ENFORCED_AUDIBLE;
-    } else {
-        mAudioStreamType = AUDIO_STREAM_MUSIC;
+	
+	char prop_value[PROPERTY_VALUE_MAX];
+    if (property_get(PROP_CAMERA_KEY, prop_value, PROP_SCREEN_DEFAULT_VALUE) > 0)
+    {
+	    LOGV("camera prop_value = %s", prop_value);
+	    String8 value_screen( prop_value );
+	    if(value_screen == PROP_MASTER_SCREEN)
+	        mOverlayScreen = MASTER_SCREEN;
+	    else
+	        mOverlayScreen = SLAVE_SCREEN;
     }
 }
 
@@ -117,6 +121,34 @@ CameraService::~CameraService() {
     }
 
     gCameraService = NULL;
+}
+
+// add for switch camera overlay surface
+int CameraService::setCameraScreen(int32_t screen)
+{
+	LOGD("CameraService::setCameraScreen: %d", screen);
+	sp<Client> client;
+	
+	mOverlayScreen = screen;
+	
+	if(mOverlayScreen == MASTER_SCREEN)
+        property_set(PROP_CAMERA_KEY, PROP_MASTER_SCREEN);
+    else
+        property_set(PROP_CAMERA_KEY, PROP_SLAVE_SCREEN);
+	
+	for(int i = 0; i < MAX_CAMERAS; i++)
+	{
+		if(mClient[i] != 0)
+		{
+			client = mClient[i].promote();
+	        if (client != 0) 
+	        {
+	            client->sendCommand(CAMERA_CMD_SET_SCREEN_ID, screen, 0);
+	        }
+		}
+	}
+		
+	return OK;
 }
 
 int32_t CameraService::getNumberOfCameras() {
@@ -295,7 +327,7 @@ void CameraService::setCameraFree(int cameraId) {
 MediaPlayer* CameraService::newMediaPlayer(const char *file) {
     MediaPlayer* mp = new MediaPlayer();
     if (mp->setDataSource(file, NULL) == NO_ERROR) {
-        mp->setAudioStreamType(mAudioStreamType);
+        mp->setAudioStreamType(AUDIO_STREAM_ENFORCED_AUDIBLE);
         mp->prepare();
     } else {
         LOGE("Failed to load CameraService sounds: %s", file);
@@ -469,10 +501,10 @@ status_t CameraService::Client::connect(const sp<ICameraClient>& client) {
 static void disconnectWindow(const sp<ANativeWindow>& window) {
     if (window != 0) {
         status_t result = native_window_api_disconnect(window.get(),
-                NATIVE_WINDOW_API_CAMERA);
+                NATIVE_WINDOW_API_CAMERA_HW);	// [star] NATIVE_WINDOW_API_CAMERA_HW
         if (result != NO_ERROR) {
-            LOGW("native_window_api_disconnect failed: %s (%d)", strerror(-result),
-                    result);
+            LOGW("native_window_api_disconnect failed: %s (%d), api: %d", strerror(-result),
+                    result, NATIVE_WINDOW_API_CAMERA_HW);
         }
     }
 }
@@ -534,13 +566,16 @@ status_t CameraService::Client::setPreviewWindow(const sp<IBinder>& binder,
     }
 
     if (window != 0) {
-        result = native_window_api_connect(window.get(), NATIVE_WINDOW_API_CAMERA);
+        result = native_window_api_connect(window.get(), NATIVE_WINDOW_API_CAMERA_HW);		// [star] NATIVE_WINDOW_API_CAMERA_HW
         if (result != NO_ERROR) {
-            LOGE("native_window_api_connect failed: %s (%d)", strerror(-result),
-                    result);
+            LOGE("native_window_api_connect failed: %s (%d), api: %d", strerror(-result),
+                    result, NATIVE_WINDOW_API_CAMERA_HW);
             return result;
         }
     }
+
+	// 
+	mHardware->sendCommand(CAMERA_CMD_SET_SCREEN_ID, mOverlayScreen, 0);
 
     // If preview has been already started, register preview buffers now.
     if (mHardware->previewEnabled()) {
@@ -854,6 +889,12 @@ status_t CameraService::Client::sendCommand(int32_t cmd, int32_t arg1, int32_t a
     LOG1("sendCommand (pid %d)", getCallingPid());
     int orientation;
     Mutex::Autolock lock(mLock);
+
+	if (cmd == CAMERA_CMD_SET_SCREEN_ID)
+	{
+		return mHardware->sendCommand(cmd, arg1, arg2);
+	}
+	
     status_t result = checkPidAndHardware();
     if (result != NO_ERROR) return result;
 
@@ -904,6 +945,7 @@ void CameraService::Client::disableMsgType(int32_t msgType) {
 #define CHECK_MESSAGE_INTERVAL 10 // 10ms
 bool CameraService::Client::lockIfMessageWanted(int32_t msgType) {
     int sleepCount = 0;
+#if 0	// star comment for taking picture deadlock
     while (mMsgEnabled & msgType) {
         if (mLock.tryLock() == NO_ERROR) {
             if (sleepCount > 0) {
@@ -919,6 +961,9 @@ bool CameraService::Client::lockIfMessageWanted(int32_t msgType) {
     }
     LOGW("lockIfMessageWanted(%d): dropped unwanted message", msgType);
     return false;
+#else
+	return true;
+#endif
 }
 
 // ----------------------------------------------------------------------------

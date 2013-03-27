@@ -56,6 +56,7 @@ private:
     enum {
         kWhatNotify          = 'noti',
         kWhatDisconnect      = 'disc',
+        kWhatPerformSeek     = 'seek',
     };
 
     enum State {
@@ -76,6 +77,7 @@ private:
         int32_t mTimeScale;
         uint32_t mRTPTime;
         int64_t mNormalPlaytimeUs;
+        bool mNPTMappingValid;
     };
 
     AString mURL;
@@ -95,11 +97,15 @@ private:
     sp<AnotherPacketSource> mAudioTrack;
     sp<AnotherPacketSource> mVideoTrack;
 
+    int32_t mSeekGeneration;
+
     sp<AnotherPacketSource> getSource(bool audio);
 
     void onConnected();
     void onDisconnected(const sp<AMessage> &msg);
     void finishDisconnectIfPossible();
+
+    void performSeek(int64_t seekTimeUs);
 
     DISALLOW_EVIL_CONSTRUCTORS(RTSPSource);
 };

@@ -28,6 +28,22 @@ keylayouts := \
     Vendor_05ac_Product_0239.kl \
     Vendor_22b8_Product_093d.kl
 
+#add by Gary. 
+#2012-08-02
+#custom the Generic.kl
+keylayouts_custom := \
+    AVRCP.kl \
+    qwerty.kl \
+    Vendor_045e_Product_028e.kl \
+    Vendor_046d_Product_c216.kl \
+    Vendor_046d_Product_c294.kl \
+    Vendor_046d_Product_c299.kl \
+    Vendor_046d_Product_c532.kl \
+    Vendor_054c_Product_0268.kl \
+    Vendor_05ac_Product_0239.kl \
+    Vendor_22b8_Product_093d.kl
+#end by Gary.
+
 keycharmaps := \
     Generic.kcm \
     Virtual.kcm \

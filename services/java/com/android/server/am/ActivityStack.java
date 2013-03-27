@@ -95,7 +95,10 @@ final class ActivityStack {
     // How long we wait until giving up on the last activity telling us it
     // is idle.
     static final int IDLE_TIMEOUT = 10*1000;
-    
+
+    // Ticks during which we check progress while waiting for an app to launch.
+    static final int LAUNCH_TICK = 500;
+
     // How long we wait until giving up on the last activity to pause.  This
     // is short because it directly impacts the responsiveness of starting the
     // next activity.
@@ -278,10 +281,11 @@ final class ActivityStack {
     static final int PAUSE_TIMEOUT_MSG = 9;
     static final int IDLE_TIMEOUT_MSG = 10;
     static final int IDLE_NOW_MSG = 11;
+    static final int LAUNCH_TICK_MSG = 12;
     static final int LAUNCH_TIMEOUT_MSG = 16;
     static final int DESTROY_TIMEOUT_MSG = 17;
     static final int RESUME_TOP_ACTIVITY_MSG = 19;
-    
+
     final Handler mHandler = new Handler() {
         //public Handler() {
         //    if (localLOGV) Slog.v(TAG, "Handler started!");
@@ -303,6 +307,13 @@ final class ActivityStack {
                     // We don't at this point know if the activity is fullscreen,
                     // so we need to be conservative and assume it isn't.
                     Slog.w(TAG, "Activity pause timeout for " + r);
+                    synchronized (mService) {
+                        if (r.app != null) {
+                            mService.logAppTooSlow(r.app, r.pauseTime,
+                                    "pausing " + r);
+                        }
+                    }
+
                     activityPaused(r != null ? r.appToken : null, true);
                 } break;
                 case IDLE_TIMEOUT_MSG: {
@@ -318,6 +329,15 @@ final class ActivityStack {
                     ActivityRecord r = (ActivityRecord)msg.obj;
                     Slog.w(TAG, "Activity idle timeout for " + r);
                     activityIdleInternal(r != null ? r.appToken : null, true, null);
+                } break;
+                case LAUNCH_TICK_MSG: {
+                    ActivityRecord r = (ActivityRecord)msg.obj;
+                    synchronized (mService) {
+                        if (r.continueLaunchTickingLocked()) {
+                            mService.logAppTooSlow(r.app, r.launchTickTime,
+                                    "launching " + r);
+                        }
+                    }
                 } break;
                 case DESTROY_TIMEOUT_MSG: {
                     ActivityRecord r = (ActivityRecord)msg.obj;
@@ -517,6 +537,9 @@ final class ActivityStack {
 
         r.startFreezingScreenLocked(app, 0);
         mService.mWindowManager.setAppVisibility(r.appToken, true);
+
+        // schedule launch ticks to collect information about slow apps.
+        r.startLaunchTickingLocked();
 
         // Have the window manager re-evaluate the orientation of
         // the screen based on the new activity order.  Note that
@@ -900,6 +923,7 @@ final class ActivityStack {
             // responsiveness seen by the user.
             Message msg = mHandler.obtainMessage(PAUSE_TIMEOUT_MSG);
             msg.obj = prev;
+            prev.pauseTime = SystemClock.uptimeMillis();
             mHandler.sendMessageDelayed(msg, PAUSE_TIMEOUT);
             if (DEBUG_PAUSE) Slog.v(TAG, "Waiting for pause to complete...");
         } else {
@@ -949,6 +973,22 @@ final class ActivityStack {
             if (r.configDestroy) {
                 destroyActivityLocked(r, true, false, "stop-config");
                 resumeTopActivityLocked(null);
+            } else {
+                // Now that this process has stopped, we may want to consider
+                // it to be the previous app to try to keep around in case
+                // the user wants to return to it.
+                ProcessRecord fgApp = null;
+                if (mResumedActivity != null) {
+                    fgApp = mResumedActivity.app;
+                } else if (mPausingActivity != null) {
+                    fgApp = mPausingActivity.app;
+                }
+                if (r.app != null && fgApp != null && r.app != fgApp
+                        && r.lastVisibleTime > mService.mPreviousProcessVisibleTime
+                        && r.app != mService.mHomeProcess) {
+                    mService.mPreviousProcess = r.app;
+                    mService.mPreviousProcessVisibleTime = r.lastVisibleTime;
+                }
             }
         }
     }
@@ -1363,14 +1403,6 @@ final class ActivityStack {
                         + ", nowVisible=" + next.nowVisible);
                 }
             }
-
-            if (!prev.finishing && prev.app != null && prev.app != next.app
-                    && prev.app != mService.mHomeProcess) {
-                // We are switching to a new activity that is in a different
-                // process than the previous one.  Note the previous process,
-                // so we can try to keep it around.
-                mService.mPreviousProcess = prev.app;
-            }
         }
 
         // Launching this app's activity, make sure the app is no longer
@@ -1434,6 +1466,9 @@ final class ActivityStack {
 
             // This activity is now becoming visible.
             mService.mWindowManager.setAppVisibility(next.appToken, true);
+
+            // schedule launch ticks to collect information about slow apps.
+            next.startLaunchTickingLocked();
 
             ActivityRecord lastResumedActivity = mResumedActivity;
             ActivityState lastState = next.state;
@@ -1924,8 +1959,9 @@ final class ActivityStack {
                     // should be left as-is.
                     replyChainEnd = -1;
                 }
-                
-            } else if (target.resultTo != null) {
+
+            } else if (target.resultTo != null && (below == null
+                    || below.task == target.task)) {
                 // If this activity is sending a reply to a previous
                 // activity, we can't do anything with it now until
                 // we reach the start of the reply chain.
@@ -1955,6 +1991,8 @@ final class ActivityStack {
                         replyChainEnd = targetI;
                     }
                     ActivityRecord p = null;
+                    if (DEBUG_TASKS) Slog.v(TAG, "Finishing task at index "
+                            + targetI + " to " + replyChainEnd);
                     for (int srcPos=targetI; srcPos<=replyChainEnd; srcPos++) {
                         p = mHistory.get(srcPos);
                         if (p.finishing) {
@@ -1973,6 +2011,8 @@ final class ActivityStack {
                     if (replyChainEnd < 0) {
                         replyChainEnd = targetI;
                     }
+                    if (DEBUG_TASKS) Slog.v(TAG, "Reparenting task at index "
+                            + targetI + " to " + replyChainEnd);
                     for (int srcPos=replyChainEnd; srcPos>=targetI; srcPos--) {
                         ActivityRecord p = mHistory.get(srcPos);
                         if (p.finishing) {
@@ -1994,6 +2034,7 @@ final class ActivityStack {
                         p.setTask(task, null, false);
                         mHistory.add(lastReparentPos, p);
                         if (DEBUG_TASKS) Slog.v(TAG, "Pulling activity " + p
+                                + " from " + srcPos + " to " + lastReparentPos
                                 + " in to resetting task " + task);
                         mService.mWindowManager.moveAppToken(lastReparentPos, p.appToken);
                         mService.mWindowManager.setAppGroupId(p.appToken, p.task.taskId);
@@ -2023,6 +2064,11 @@ final class ActivityStack {
                         }
                     }
                 }
+
+            } else if (below != null && below.task != target.task) {
+                // We hit the botton of a task; the reply chain can't
+                // pass through it.
+                replyChainEnd = -1;
             }
             
             target = below;
@@ -3199,6 +3245,7 @@ final class ActivityStack {
             ActivityRecord r = ActivityRecord.forToken(token);
             if (r != null) {
                 mHandler.removeMessages(IDLE_TIMEOUT_MSG, r);
+                r.finishLaunchTickingLocked();
             }
 
             // Get the activity record.
@@ -3343,6 +3390,33 @@ final class ActivityStack {
         return true;
     }
 
+    final void finishActivityResultsLocked(ActivityRecord r, int resultCode, Intent resultData) {
+        // send the result
+        ActivityRecord resultTo = r.resultTo;
+        if (resultTo != null) {
+            if (DEBUG_RESULTS) Slog.v(TAG, "Adding result to " + resultTo
+                    + " who=" + r.resultWho + " req=" + r.requestCode
+                    + " res=" + resultCode + " data=" + resultData);
+            if (r.info.applicationInfo.uid > 0) {
+                mService.grantUriPermissionFromIntentLocked(r.info.applicationInfo.uid,
+                        resultTo.packageName, resultData,
+                        resultTo.getUriPermissionsLocked());
+            }
+            resultTo.addResultLocked(r, r.resultWho, r.requestCode, resultCode,
+                                     resultData);
+            r.resultTo = null;
+        }
+        else if (DEBUG_RESULTS) Slog.v(TAG, "No result destination from " + r);
+
+        // Make sure this HistoryRecord is not holding on to other resources,
+        // because clients have remote IPC references to this object so we
+        // can't assume that will go away and want to avoid circular IPC refs.
+        r.results = null;
+        r.pendingResults = null;
+        r.newIntents = null;
+        r.icicle = null;
+    }
+
     /**
      * @return Returns true if this activity has been removed from the history
      * list, or false if it is still in the list and will be removed later.
@@ -3381,30 +3455,7 @@ final class ActivityStack {
             }
         }
 
-        // send the result
-        ActivityRecord resultTo = r.resultTo;
-        if (resultTo != null) {
-            if (DEBUG_RESULTS) Slog.v(TAG, "Adding result to " + resultTo
-                    + " who=" + r.resultWho + " req=" + r.requestCode
-                    + " res=" + resultCode + " data=" + resultData);
-            if (r.info.applicationInfo.uid > 0) {
-                mService.grantUriPermissionFromIntentLocked(r.info.applicationInfo.uid,
-                        resultTo.packageName, resultData, 
-                        resultTo.getUriPermissionsLocked());
-            }
-            resultTo.addResultLocked(r, r.resultWho, r.requestCode, resultCode,
-                                     resultData);
-            r.resultTo = null;
-        }
-        else if (DEBUG_RESULTS) Slog.v(TAG, "No result destination from " + r);
-
-        // Make sure this HistoryRecord is not holding on to other resources,
-        // because clients have remote IPC references to this object so we
-        // can't assume that will go away and want to avoid circular IPC refs.
-        r.results = null;
-        r.pendingResults = null;
-        r.newIntents = null;
-        r.icicle = null;
+        finishActivityResultsLocked(r, resultCode, resultData);
         
         if (mService.mPendingThumbnails.size() > 0) {
             // There are clients waiting to receive thumbnails so, in case
@@ -3565,10 +3616,12 @@ final class ActivityStack {
         mHandler.removeMessages(PAUSE_TIMEOUT_MSG, r);
         mHandler.removeMessages(IDLE_TIMEOUT_MSG, r);
         mHandler.removeMessages(DESTROY_TIMEOUT_MSG, r);
+        r.finishLaunchTickingLocked();
     }
 
-    private final void removeActivityFromHistoryLocked(ActivityRecord r) {
+    final void removeActivityFromHistoryLocked(ActivityRecord r) {
         if (r.state != ActivityState.DESTROYED) {
+            finishActivityResultsLocked(r, Activity.RESULT_CANCELED, null);
             r.makeFinishing();
             if (DEBUG_ADD_REMOVE) {
                 RuntimeException here = new RuntimeException("here");

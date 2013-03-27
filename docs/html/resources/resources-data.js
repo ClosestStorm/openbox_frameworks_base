@@ -508,6 +508,16 @@ var ANDROID_RESOURCES = [
     }
   },
   {
+    tags: ['sample', 'new'],
+    path: 'samples/training/device-management-policy/index.html',
+    title: {
+      en: 'Device Policy Management'
+    },
+    description: {
+      en: 'This is a security-aware sample application that demonstrates the enforcement of device administration policies on Android 2.2 or above platforms.'
+    }
+  },
+  {
     tags: ['sample'],
     path: 'samples/Home/index.html',
     title: {
@@ -548,6 +558,16 @@ var ANDROID_RESOURCES = [
     }
   },
   {
+    tags: ['sample', 'new'],
+    path: 'samples/training/ads-and-ux/index.html',
+    title: {
+      en: 'Mobile Advertisement Integration'
+    },
+    description: {
+      en: 'This sample demonstrates the integration of a mobile ad SDK with your application.'
+    }
+  },
+  {
     tags: ['sample', 'ui', 'bestpractice', 'layout'],
     path: 'samples/MultiResolution/index.html',
     title: {
@@ -555,6 +575,16 @@ var ANDROID_RESOURCES = [
     },
     description: {
       en: 'A sample application that shows how to use resource directory qualifiers to provide different resources for different screen configurations.'
+    }
+  },
+  {
+    tags: ['sample', 'new', 'bestpractices'],
+    path: 'samples/newsreader/index.html',
+    title: {
+      en: 'News Reader'
+    },
+    description: {
+      en: 'A sample app demonstrating best practices to support multiple screen sizes and densities.'
     }
   },
   {
@@ -718,6 +748,16 @@ var ANDROID_RESOURCES = [
     }
   },
   {
+    tags: ['sample', 'communication', 'new'],
+    path: 'samples/ToyVpn/index.html',
+    title: {
+      en: 'Toy VPN Client'
+    },
+    description: {
+      en: 'A sample application that illustrates the creation of a custom VPN client.'
+    }
+  },
+  {
     tags: ['sample', 'newfeature'],
     path: 'samples/USB/index.html',
     title: {
@@ -843,7 +883,7 @@ var ANDROID_RESOURCES = [
     }
   },
   {
-    tags: ['tutorial', 'gl', 'new'],
+    tags: ['tutorial', 'gl'],
     path: 'tutorials/opengl/opengl-es10.html',
     title: {
       en: 'OpenGL ES 1.0'
@@ -853,7 +893,7 @@ var ANDROID_RESOURCES = [
     }
   },
   {
-    tags: ['tutorial', 'gl', 'new'],
+    tags: ['tutorial', 'gl'],
     path: 'tutorials/opengl/opengl-es20.html',
     title: {
       en: 'OpenGL ES 2.0'

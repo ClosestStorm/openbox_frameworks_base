@@ -30,6 +30,7 @@
 #include <SkColor.h>
 #include <SkPaint.h>
 #include <SkXfermode.h>
+#include <cutils/properties.h>
 
 namespace android {
 
@@ -73,7 +74,7 @@ PointerController::PointerController(const sp<PointerControllerPolicyInterface>&
     mLocked.pointerX = 0;
     mLocked.pointerY = 0;
     mLocked.pointerAlpha = 0.0f; // pointer is initially faded
-    mLocked.pointerSprite = mSpriteController->createSprite();
+    mLocked.pointerSprite = mSpriteController->createSprite(true);
     mLocked.pointerIconChanged = false;
 
     mLocked.buttonState = 0;
@@ -121,6 +122,19 @@ bool PointerController::getBoundsLocked(float* outMinX, float* outMinY,
         *outMaxY = mLocked.displayHeight - 1;
         break;
     }
+    char property[PROPERTY_VALUE_MAX];
+    if (property_get("ro.sf.hwrotation", property, NULL) > 0) {
+		float temp ;
+        //displayOrientation
+        switch (atoi(property)) {
+        case 270:
+			temp =*outMaxX ;
+			*outMaxX =*outMaxY;
+			*outMaxY =temp;
+            break;
+        }
+    }
+
     return true;
 }
 
@@ -527,7 +541,7 @@ PointerController::Spot* PointerController::createAndAddSpotLocked(uint32_t id) 
         sprite = mLocked.recycledSprites.top();
         mLocked.recycledSprites.pop();
     } else {
-        sprite = mSpriteController->createSprite();
+        sprite = mSpriteController->createSprite(false);
     }
 
     // Return the new spot.

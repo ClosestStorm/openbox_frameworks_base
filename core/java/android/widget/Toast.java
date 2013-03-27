@@ -32,6 +32,7 @@ import android.view.WindowManager;
 import android.view.WindowManagerImpl;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
+import java.lang.ref.WeakReference;
 
 /**
  * A toast is a view containing a quick little message for the user.  The toast class
@@ -88,7 +89,12 @@ public class Toast {
      */
     public Toast(Context context) {
         mContext = context;
-        mTN = new TN();
+        /* modified by Gary. start {{----------------------------------- */
+        /* 2011-10-25 */
+        /* add a callback method when the toast hides and another method to check whether the toast is showing */
+        //mTN = new TN();
+        mTN = new TN(this);
+        /* modified by Gary. end   -----------------------------------}} */
         mTN.mY = context.getResources().getDimensionPixelSize(
                 com.android.internal.R.dimen.toast_y_offset);
     }
@@ -283,6 +289,26 @@ public class Toast {
         tv.setText(s);
     }
 
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-10-25 */
+    /* add a callback method when the toast hides and another method to check whether the toast is showing */
+    
+    /**
+     * a callback method. When the toast hides, the method is called.
+     */
+    public void onHide( ){
+        return;
+    }
+
+    /**
+     * check whether the toast is showing or not.
+     */
+     public boolean isShowing( ){
+        return ( mTN.mView != null );
+     }
+
+    /* add by Gary. end   -----------------------------------}} */
+
     // =======================================================================================
     // All the gunk below is the interaction with the Notification Service, which handles
     // the proper ordering of these system-wide.
@@ -326,8 +352,19 @@ public class Toast {
         View mNextView;
         
         WindowManagerImpl mWM;
+        
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-10-25 */
+        /* add a callback method when the toast hides and another method to check whether the toast is showing */
+        private WeakReference<Toast> mToast;
+        /* add by Gary. end   -----------------------------------}} */
 
-        TN() {
+        /* modified by Gary. start {{----------------------------------- */
+        /* 2011-10-25 */
+        /* add a callback method when the toast hides and another method to check whether the toast is showing */
+        //TN() {
+        TN(Toast toast) {
+        /* modified by Gary. end   -----------------------------------}} */
             // XXX This should be changed to use a Dialog, with a Theme.Toast
             // defined that sets up the layout params appropriately.
             final WindowManager.LayoutParams params = mParams;
@@ -340,6 +377,11 @@ public class Toast {
             params.windowAnimations = com.android.internal.R.style.Animation_Toast;
             params.type = WindowManager.LayoutParams.TYPE_TOAST;
             params.setTitle("Toast");
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-10-25 */
+            /* add a callback method when the toast hides and another method to check whether the toast is showing */
+            mToast = new WeakReference<Toast>(toast);
+            /* add by Gary. end   -----------------------------------}} */
         }
 
         /**
@@ -413,6 +455,12 @@ public class Toast {
                 if (mView.getParent() != null) {
                     if (localLOGV) Log.v(TAG, "REMOVE! " + mView + " in " + this);
                     mWM.removeView(mView);
+                    /* add by Gary. start {{----------------------------------- */
+                    /* 2011-10-25 */
+                    /* add a callback method when the toast hides and another method to check whether the toast is showing */
+                    if(mToast.get() != null)
+                        ((Toast)mToast.get()).onHide();
+                    /* add by Gary. end   -----------------------------------}} */
                 }
 
                 mView = null;

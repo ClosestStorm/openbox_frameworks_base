@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <sys/types.h>
-
+#include <hardware/hwcomposer.h>
 #include <utils/Errors.h>
 
 #include "Layer.h"
@@ -28,7 +28,9 @@ namespace android {
 
 
 SurfaceTextureLayer::SurfaceTextureLayer(GLuint tex, const sp<Layer>& layer)
-    : SurfaceTexture(tex), mLayer(layer) {
+    : SurfaceTexture(tex, true, GL_TEXTURE_EXTERNAL_OES, false), mLayer(layer) {
+    usehwcomposer = false;
+    usehwinit     = false;
 }
 
 SurfaceTextureLayer::~SurfaceTextureLayer() {
@@ -54,7 +56,6 @@ status_t SurfaceTextureLayer::setBufferCount(int bufferCount) {
 
 status_t SurfaceTextureLayer::queueBuffer(int buf, int64_t timestamp,
         uint32_t* outWidth, uint32_t* outHeight, uint32_t* outTransform) {
-
     status_t res = SurfaceTexture::queueBuffer(buf, timestamp,
             outWidth, outHeight, outTransform);
     sp<Layer> layer(mLayer.promote());
@@ -66,7 +67,6 @@ status_t SurfaceTextureLayer::queueBuffer(int buf, int64_t timestamp,
 
 status_t SurfaceTextureLayer::dequeueBuffer(int *buf,
         uint32_t w, uint32_t h, uint32_t format, uint32_t usage) {
-
     status_t res(NO_INIT);
     sp<Layer> layer(mLayer.promote());
     if (layer != NULL) {
@@ -94,6 +94,11 @@ status_t SurfaceTextureLayer::connect(int api,
             *outTransform = orientation;
         }
         switch(api) {
+			case NATIVE_WINDOW_API_MEDIA_HW:
+			case NATIVE_WINDOW_API_CAMERA_HW:
+				usehwcomposer = true;
+				break;
+				
             case NATIVE_WINDOW_API_MEDIA:
             case NATIVE_WINDOW_API_CAMERA:
                 // Camera preview and videos are rate-limited on the producer
@@ -101,7 +106,7 @@ status_t SurfaceTextureLayer::connect(int api,
                 // show the most recent frame at the cost of requiring an
                 // additional buffer.
 #ifndef NEVER_DEFAULT_TO_ASYNC_MODE
-                err = setSynchronousMode(false);
+                err = setSynchronousMode(true);
                 break;
 #endif
                 // fall through to set synchronous mode when not defaulting to
@@ -115,6 +120,75 @@ status_t SurfaceTextureLayer::connect(int api,
         }
     }
     return err;
+}
+
+status_t SurfaceTextureLayer::disconnect(int api) 
+{
+    status_t err = SurfaceTexture::disconnect(api);
+
+    switch(api) 
+    {
+        case NATIVE_WINDOW_API_MEDIA_HW:
+        case NATIVE_WINDOW_API_CAMERA_HW:
+            usehwcomposer = false;
+            usehwinit     = false;
+            break;
+        deafult:
+            break;
+    }
+    
+    return err;
+}
+
+int SurfaceTextureLayer::setParameter(uint32_t cmd,uint32_t value) 
+{
+    int res = 0;
+	SurfaceTexture::setParameter(cmd,value);
+	
+    sp<Layer> layer(mLayer.promote());
+    if (layer != NULL) 
+    {
+    	if(cmd == HWC_LAYER_SETINITPARA)
+    	{
+    		layerinitpara_t  *layer_info;
+    		
+    		layer_info = (layerinitpara_t  *)value;
+
+            if(IsHardwareRenderSupport())
+            {
+                Rect Crop(SurfaceTexture::getCurrentCrop());
+                
+    		    layer->setTextureInfo(Crop,layer_info->format);
+
+                usehwinit = true;
+            }
+    	}
+
+        if(usehwinit == true)
+        {
+        	res = layer->setDisplayParameter(cmd,value);
+        }
+    }
+    
+    return res;
+}
+
+
+uint32_t SurfaceTextureLayer::getParameter(uint32_t cmd) 
+{
+    uint32_t res = 0;
+    
+	if(cmd == NATIVE_WINDOW_CMD_GET_SURFACE_TEXTURE_TYPE) {
+		return 1;
+	}
+
+    sp<Layer> layer(mLayer.promote());
+    if (layer != NULL) 
+    {
+        res = layer->getDisplayParameter(cmd);
+    }
+    
+    return res;
 }
 
 // ---------------------------------------------------------------------------

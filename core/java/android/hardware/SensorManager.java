@@ -22,6 +22,8 @@ import android.os.RemoteException;
 import android.os.Handler;
 import android.os.Message;
 import android.os.ServiceManager;
+import android.os.SystemProperties;
+
 import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseBooleanArray;
@@ -29,6 +31,8 @@ import android.util.SparseIntArray;
 import android.view.IRotationWatcher;
 import android.view.IWindowManager;
 import android.view.Surface;
+import android.content.Context;
+import android.provider.Settings;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -354,7 +358,7 @@ public class SensorManager
     public static final int AXIS_MINUS_Z = AXIS_Z | 0x80;
 
     /*-----------------------------------------------------------------------*/
-
+	Context mContext;
     Looper mMainLooper;
     @SuppressWarnings("deprecation")
     private HashMap<SensorListener, LegacyListener> mLegacyListenersMap =
@@ -606,10 +610,38 @@ public class SensorManager
 
         void onSensorChangedLocked(Sensor sensor, float[] values, long[] timestamp, int accuracy) {
             SensorEvent t = sPool.getFromPool();
-            final float[] v = t.values;
-            v[0] = values[0];
-            v[1] = values[1];
-            v[2] = values[2];
+            final float[] v = t.values;			
+			String  str = Settings.System.getString(mContext.getContentResolver(), Settings.System.ACCELEROMETER_COORDINATE);
+			int stype = sensor.getType();
+			if(SystemProperties.getInt("ro.sf.hwrotation",0)==270)
+			{	
+				t.originalValue[0]	= values[1];
+				t.originalValue[1]	= -values[0];
+				t.originalValue[2]	= values[2];	
+				v[0] = values[1];
+				v[1] = -values[0];
+				v[2] = values[2];
+				
+			}
+			else
+			{
+				t.originalValue[0]	= values[0];
+				t.originalValue[1]	= values[1];
+				t.originalValue[2]	= values[2];
+			}
+			
+			if(str!=null && str.equals("special")&&((stype == sensor.TYPE_ACCELEROMETER)||(stype == sensor.TYPE_GRAVITY)))
+	        {
+				v[0] = values[1];
+				v[1] = -values[0];
+				v[2] = values[2];
+			}
+			else{
+				v[0] = values[0];
+				v[1] = values[1];
+				v[2] = values[2];
+			}
+
             t.timestamp = timestamp[0];
             t.accuracy = accuracy;
             t.sensor = sensor;
@@ -623,9 +655,9 @@ public class SensorManager
     /**
      * {@hide}
      */
-    public SensorManager(Looper mainLooper) {
+    public SensorManager(Context context,Looper mainLooper) {
         mMainLooper = mainLooper;
-
+		mContext = context;
 
         synchronized(sListeners) {
             if (!sSensorModuleInitialized) {
@@ -1699,7 +1731,7 @@ public class SensorManager
             return true;
         }
 
-        @SuppressWarnings("deprecation")
+      //  @SuppressWarnings("deprecation")
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
             try {
                 mTarget.onAccuracyChanged(sensor.getLegacyType(), accuracy);
@@ -1709,7 +1741,7 @@ public class SensorManager
             }
         }
 
-        @SuppressWarnings("deprecation")
+//        @SuppressWarnings("deprecation")
         public void onSensorChanged(SensorEvent event) {
             final float v[] = mValues;
             v[0] = event.values[0];

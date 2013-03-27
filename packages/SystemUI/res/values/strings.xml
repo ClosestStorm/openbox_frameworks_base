@@ -3,16 +3,16 @@
 /**
  * Copyright (c) 2009, The Android Open Source Project
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); 
- * you may not use this file except in compliance with the License. 
- * You may obtain a copy of the License at 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0 
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software 
- * distributed under the License is distributed on an "AS IS" BASIS, 
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
- * See the License for the specific language governing permissions and 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
  */
 -->
@@ -363,6 +363,29 @@
     <!-- Content description of the clear button in the notification panel for accessibility (not shown on the screen). [CHAR LIMIT=NONE] -->
     <string name="accessibility_clear_all">Clear all notifications.</string>
 
-    <!-- Description of the desk dock action that invokes the Android Dreams screen saver feature -->
-    <string name="dreams_dock_launcher">Activate screen saver</string>
+	<!-- ethernet string  -->
+    <string name="ethernet_link">Ethernet connect to network</string>
+	<string name="ethernet_description">Ethernet</string>
+
+	<!-- notify devices mounted -->
+	<string name="usb_mounted_title">usb is mounted</string>
+	<string name="usb_mounted_message">usb is mounted</string>
+	<string name="sd_mounted_title">sdcard is mounted</string>
+	<string name="sd_mounted_message">sdcard is mounted</string>
+	<string name="usb_unmountable_notification_title">Damaged USB storage</string>
+	<string name="usb_unmountable_notification_message">USB storage damaged. You may have to reformat it.</string>
+	<string name="usb_badremoval_notification_title">USB storage unexpectedly removed</string>
+	<string name="usb_badremoval_notification_message">Unmount USB storage before removing to avoid data loss.</string>
+	<string name="usb_nomedia_notification_title">Removed USB storage</string>
+	<string name="usb_nomedia_notification_message">USB storage removed. Insert new media.</string>
+
+	<string name="notifications_off_title">"The notification feature has been disabled"</string>
+  <string name="notifications_off_text">"Click here to re-enable the notification feature."</string>
+	<!-- notification for audio plug in/out -->
+	<string name="audio_out_plug_in_title">USB Audio-out device plug in</string>
+	<string name="audio_plug_in_message">Switch to USB audio channel</string>
+	<string name="audio_plug_out_message">Change to default channel</string>
+	<string name="audio_out_plug_out_title">USB Audio-out device plug out</string>
+	<string name="audio_in_plug_in_title">USB Audio-in device plug in</string>
+	<string name="audio_in_plug_out_title">USB Audio-in device plug out</string>
 </resources>

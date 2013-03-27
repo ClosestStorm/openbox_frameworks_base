@@ -137,6 +137,9 @@
     <string name="turn_off_radio" msgid="8198784949987062346">"Desactivar función inalámbrica"</string>
     <string name="screen_lock" msgid="799094655496098153">"Bloqueo de pantalla"</string>
     <string name="power_off" msgid="4266614107412865048">"Apagar"</string>
+    <string name="silent_mode_silent" msgid="319298163018473078">"Timbre desactivado"</string>
+    <string name="silent_mode_vibrate" msgid="7072043388581551395">"Modo vibración"</string>
+    <string name="silent_mode_ring" msgid="8592241816194074353">"Timbre activado"</string>
     <string name="shutdown_progress" msgid="2281079257329981203">"Apagando..."</string>
     <string name="shutdown_confirm" product="tablet" msgid="3385745179555731470">"El tablet se apagará."</string>
     <string name="shutdown_confirm" product="default" msgid="649792175242821353">"El teléfono se apagará."</string>
@@ -793,7 +796,7 @@
     <string name="last_month" msgid="3959346739979055432">"El mes pasado"</string>
     <string name="older" msgid="5211975022815554840">"Anterior"</string>
   <plurals name="num_days_ago">
-    <item quantity="one" msgid="861358534398115820">"ayer"</item>
+    <item quantity="one" msgid="861358534398115820">"Ayer"</item>
     <item quantity="other" msgid="2479586466153314633">"Hace <xliff:g id="COUNT">%d</xliff:g> días"</item>
   </plurals>
   <plurals name="in_num_seconds">
@@ -825,7 +828,7 @@
     <item quantity="other" msgid="6889970745748538901">"hace <xliff:g id="COUNT">%d</xliff:g> horas"</item>
   </plurals>
   <plurals name="abbrev_num_days_ago">
-    <item quantity="one" msgid="8463161711492680309">"ayer"</item>
+    <item quantity="one" msgid="8463161711492680309">"Ayer"</item>
     <item quantity="other" msgid="3453342639616481191">"hace <xliff:g id="COUNT">%d</xliff:g> días"</item>
   </plurals>
   <plurals name="abbrev_in_num_seconds">
@@ -919,10 +922,10 @@
     <string name="screen_compat_mode_hint" msgid="2953716574198046484">"Vuelve a habilitar esta opción en Ajustes &gt; Aplicaciones &gt; Administrar aplicaciones."</string>
     <string name="smv_application" msgid="295583804361236288">"La aplicación <xliff:g id="APPLICATION">%1$s</xliff:g> (proceso <xliff:g id="PROCESS">%2$s</xliff:g>) ha infringido su política StrictMode autoaplicable."</string>
     <string name="smv_process" msgid="5120397012047462446">"El proceso <xliff:g id="PROCESS">%1$s</xliff:g> ha infringido su política StrictMode autoaplicable."</string>
-    <string name="android_upgrading_title" msgid="378740715658358071">"Actualizando Android..."</string>
-    <string name="android_upgrading_apk" msgid="274409861603566003">"Optimizando aplicación <xliff:g id="NUMBER_0">%1$d</xliff:g> de <xliff:g id="NUMBER_1">%2$d</xliff:g>"</string>
+    <string name="android_upgrading_title" msgid="378740715658358071">"Actualizando Android"</string>
+    <string name="android_upgrading_apk" msgid="274409861603566003">"Optimizando aplicación <xliff:g id="NUMBER_0">%1$d</xliff:g> de <xliff:g id="NUMBER_1">%2$d</xliff:g>..."</string>
     <string name="android_upgrading_starting_apps" msgid="7959542881906488763">"Iniciando aplicaciones"</string>
-    <string name="android_upgrading_complete" msgid="1405954754112999229">"Finalizando arranque"</string>
+    <string name="android_upgrading_complete" msgid="1405954754112999229">"Finalizando inicio..."</string>
     <string name="heavy_weight_notification" msgid="9087063985776626166">"<xliff:g id="APP">%1$s</xliff:g> en ejecución"</string>
     <string name="heavy_weight_notification_detail" msgid="2423977499339403402">"Seleccionar para cambiar a la aplicación"</string>
     <string name="heavy_weight_switcher_title" msgid="1135403633766694316">"¿Cambiar de aplicación?"</string>
@@ -959,6 +962,9 @@
     <item quantity="one" msgid="1634101450343277345">"Red Wi-Fi abierta disponible"</item>
     <item quantity="other" msgid="7915895323644292768">"Redes Wi-Fi abiertas disponibles"</item>
   </plurals>
+    <string name="wifi_available_sign_in" msgid="9157196203958866662">"Iniciar sesión en red Wi-Fi"</string>
+    <!-- no translation found for wifi_available_sign_in_detailed (6797764740339907572) -->
+    <skip />
     <string name="wifi_watchdog_network_disabled" msgid="7904214231651546347">"No se ha podido establecer conexión con la red Wi-Fi."</string>
     <string name="wifi_watchdog_network_disabled_detailed" msgid="4917472096696322767">" tiene una mala conexión a Internet."</string>
     <string name="wifi_p2p_dialog_title" msgid="97611782659324517">"Wi-Fi Direct"</string>

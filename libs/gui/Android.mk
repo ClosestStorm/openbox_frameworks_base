@@ -28,6 +28,7 @@ LOCAL_SHARED_LIBRARIES := \
 	libui \
 	libEGL \
 	libGLESv2 \
+	libsurfaceclient \
 
 
 LOCAL_MODULE:= libgui

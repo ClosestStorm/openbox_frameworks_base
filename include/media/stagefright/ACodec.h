@@ -111,6 +111,9 @@ private:
 
     sp<ANativeWindow> mNativeWindow;
 
+    sp<ANativeWindow> mNativeWindowSoft;
+    int32_t mVideoWidth,mVideoHeight;
+
     Vector<BufferInfo> mBuffers[2];
     bool mPortEOS[2];
     status_t mInputEOSResult;
@@ -152,7 +155,7 @@ private:
 
     status_t setupAACDecoder(int32_t numChannels, int32_t sampleRate);
     status_t setupAMRDecoder(bool isWAMR);
-    status_t setupG711Decoder(int32_t numChannels);
+    status_t setupG711Decoder(int32_t numChannels, int32_t sampleRate);
 
     status_t setupRawAudioFormat(
             OMX_U32 portIndex, int32_t sampleRate, int32_t numChannels);
@@ -165,6 +168,8 @@ private:
     bool allYourBuffersAreBelongToUs(OMX_U32 portIndex);
 
     bool allYourBuffersAreBelongToUs();
+
+    size_t countBuffersOwnedByComponent(OMX_U32 portIndex) const;
 
     void deferMessage(const sp<AMessage> &msg);
     void processDeferredMessages();

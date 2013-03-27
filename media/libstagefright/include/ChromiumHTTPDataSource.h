@@ -53,6 +53,18 @@ struct ChromiumHTTPDataSource : public HTTPBase {
 
     virtual status_t reconnectAtOffset(off64_t offset);
 
+    //* add by chenxiaochuan for QQ live stream.
+    virtual AString getRedirectUri(bool getAll = false);
+
+    virtual bool isRedirected();
+
+    virtual void setRedirectHost(const char* host);
+
+    virtual void setRedirectPort(const char* port);
+
+    virtual void setRedirectPath(const char* path);
+    //* end.
+
 protected:
     virtual ~ChromiumHTTPDataSource();
 
@@ -78,6 +90,12 @@ private:
 
     AString mURI;
     KeyedVector<String8, String8> mHeaders;
+
+    AString mRedirectHost;
+    AString mRedirectPort;
+    AString mRedirectPath;
+    AString mRedirectURI;
+    bool    mIsRedirected;
 
     off64_t mCurrentOffset;
 

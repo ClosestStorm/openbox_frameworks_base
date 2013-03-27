@@ -47,6 +47,7 @@ import android.util.Slog;
 import android.util.SparseArray;
 import android.util.TimeUtils;
 
+import com.android.internal.os.AtomicFile;
 import com.android.internal.R;
 import com.android.internal.net.NetworkStatsFactory;
 import com.android.internal.util.JournaledFile;
@@ -106,7 +107,7 @@ public final class BatteryStatsImpl extends BatteryStats {
 
     private static int sNumSpeedSteps;
 
-    private final JournaledFile mFile;
+    private final AtomicFile mFile;
 
     static final int MSG_UPDATE_WAKELOCKS = 1;
     static final int MSG_REPORT_POWER_CHANGE = 2;
@@ -4047,7 +4048,7 @@ public final class BatteryStatsImpl extends BatteryStats {
     }
 
     public BatteryStatsImpl(String filename) {
-        mFile = new JournaledFile(new File(filename), new File(filename + ".tmp"));
+		mFile = new AtomicFile(new File(filename));
         mHandler = new MyHandler();
         mStartCount++;
         mScreenOnTimer = new StopwatchTimer(null, -1, null, mUnpluggables);
@@ -4866,17 +4867,17 @@ public final class BatteryStatsImpl extends BatteryStats {
 
             mWriteLock.lock();
         }
-
+		FileOutputStream stream = null;
         try {
-            FileOutputStream stream = new FileOutputStream(mFile.chooseForWrite());
+			stream =mFile.startWrite();
             stream.write(next.marshall());
             stream.flush();
             FileUtils.sync(stream);
             stream.close();
-            mFile.commit();
+            mFile.finishWrite(stream);
         } catch (IOException e) {
             Slog.w("BatteryStats", "Error writing battery statistics", e);
-            mFile.rollback();
+            mFile.failWrite(stream);
         } finally {
             next.recycle();
             mWriteLock.unlock();
@@ -4915,12 +4916,7 @@ public final class BatteryStatsImpl extends BatteryStats {
         mUidStats.clear();
 
         try {
-            File file = mFile.chooseForRead();
-            if (!file.exists()) {
-                return;
-            }
-            FileInputStream stream = new FileInputStream(file);
-
+            FileInputStream stream = mFile.openRead();
             byte[] raw = readFully(stream);
             Parcel in = Parcel.obtain();
             in.unmarshall(raw, 0, raw.length);

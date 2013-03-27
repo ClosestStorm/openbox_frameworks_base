@@ -37,11 +37,11 @@ public class StaticLayoutDirectionsTest extends TestCase {
     private static final int RUN_LEVEL_MASK = 0x3f;
     private static final int RUN_RTL_FLAG = 1 << RUN_LEVEL_SHIFT;
 
-    private static final Directions DIRS_ALL_LEFT_TO_RIGHT =
+    /*private static final Directions DIRS_ALL_LEFT_TO_RIGHT =
         new Directions(new int[] { 0, RUN_LENGTH_MASK });
     private static final Directions DIRS_ALL_RIGHT_TO_LEFT =
         new Directions(new int[] { 0, RUN_LENGTH_MASK | RUN_RTL_FLAG });
-
+     */
     private static final int LVL1_1 = 1 | (1 << RUN_LEVEL_SHIFT);
     private static final int LVL2_1 = 1 | (2 << RUN_LEVEL_SHIFT);
     private static final int LVL2_2 = 2 | (2 << RUN_LEVEL_SHIFT);
@@ -71,7 +71,7 @@ public class StaticLayoutDirectionsTest extends TestCase {
 
     // Expected directions are an array of start/length+level pairs,
     // in visual order from the leading margin.
-    private static Directions[] expected = {
+   /* private static Directions[] expected = {
         DIRS_ALL_LEFT_TO_RIGHT,
         DIRS_ALL_LEFT_TO_RIGHT,
         DIRS_ALL_LEFT_TO_RIGHT,
@@ -92,7 +92,7 @@ public class StaticLayoutDirectionsTest extends TestCase {
         dirs(0, LVL1_1, 1, LVL2_2),
         dirs(0, LVL1_1, 1, LVL2_2),
         dirs(0, LVL1_1, 1, LVL2_1, 2, LVL1_1),
-    };
+    };  */
 
     private static String pseudoBidiToReal(String src) {
         char[] chars = src.toCharArray();
@@ -105,9 +105,9 @@ public class StaticLayoutDirectionsTest extends TestCase {
 
         return new String(chars, 0, chars.length);
     }
-
+     /*  not really a test */
     // @SmallTest
-    public void testDirections() {
+  /*  public void testDirections() {
         StringBuilder buf = new StringBuilder("\n");
         Formatter f = new Formatter(buf);
 
@@ -173,7 +173,7 @@ public class StaticLayoutDirectionsTest extends TestCase {
             }
             n = t;
         }
-    }
+    }  */
 
     // utility, not really a test
     /*

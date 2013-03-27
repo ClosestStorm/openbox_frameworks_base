@@ -48,6 +48,7 @@ LOCAL_SRC_FILES:= \
 	android_emoji_EmojiFactory.cpp \
 	android_view_Display.cpp \
 	android_view_Surface.cpp \
+	android_view_HWCursor.cpp \
 	android_view_TextureView.cpp \
 	android_view_InputChannel.cpp \
 	android_view_InputQueue.cpp \
@@ -66,6 +67,7 @@ LOCAL_SRC_FILES:= \
 	android_os_MessageQueue.cpp \
 	android_os_ParcelFileDescriptor.cpp \
 	android_os_Power.cpp \
+	android_os_Gpio.cpp \
 	android_os_StatFs.cpp \
 	android_os_SystemClock.cpp \
 	android_os_SystemProperties.cpp \
@@ -155,7 +157,8 @@ LOCAL_SRC_FILES:= \
 	android_app_backup_FullBackup.cpp \
 	android_content_res_ObbScanner.cpp \
 	android_content_res_Configuration.cpp \
-    android_animation_PropertyValuesHolder.cpp
+    android_animation_PropertyValuesHolder.cpp \
+    misc_rw.cpp
 
 LOCAL_C_INCLUDES += \
 	$(JNI_H_INCLUDE) \

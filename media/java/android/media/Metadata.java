@@ -407,6 +407,12 @@ public class Metadata
         return true;
     }
 
+	public void recycleParcel() {
+        if (mParcel != null) {
+			mParcel.recycle();
+        }
+    }
+
     /**
      * @return The set of metadata ID found.
      */

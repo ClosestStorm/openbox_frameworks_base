@@ -3490,4 +3490,7 @@ public class Camera {
             return false;
         }
     };
+
+	// add for set video screen
+	public static native int setCameraScreen(int screen);
 }

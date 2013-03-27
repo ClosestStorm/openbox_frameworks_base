@@ -238,6 +238,14 @@ public interface WindowManagerPolicy {
         public WindowManager.LayoutParams getAttrs();
 
         /**
+         * Return whether this window needs the menu key shown.  Must be called
+         * with window lock held, because it may need to traverse down through
+         * window list to determine the result.
+         * @param bottom The bottom-most window to consider when determining this.
+         */
+        public boolean getNeedsMenuLw(WindowState bottom);
+
+        /**
          * Retrieve the current system UI visibility flags associated with
          * this window.
          */
@@ -288,6 +296,11 @@ public interface WindowManagerPolicy {
          * window manager lock held.
          */
         boolean isDisplayedLw();
+
+        /**
+         * Is this window considered to be gone for purposes of layout?
+         */
+        boolean isGoneForLayoutLw();
 
         /**
          * Returns true if this window has been shown on screen at some time in 
@@ -938,6 +951,10 @@ public interface WindowManagerPolicy {
      */
     public void systemReady();
 
+	public boolean statusbarShow();
+
+	public boolean statusbarHide();
+
     /**
      * Called when the system is done booting to the point where the
      * user can start interacting with it.
@@ -1013,6 +1030,11 @@ public interface WindowManagerPolicy {
      * Specifies whether there is an on-screen navigation bar separate from the status bar.
      */
     public boolean hasNavigationBar();
+
+    /**
+     * Lock the device now.
+     */
+    public void lockNow();
 
     /**
      * Print the WindowManagerPolicy's state into the given stream.

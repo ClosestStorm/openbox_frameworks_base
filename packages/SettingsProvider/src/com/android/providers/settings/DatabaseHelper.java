@@ -27,6 +27,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
+import android.view.WindowManager;
 import android.media.AudioManager;
 import android.media.AudioService;
 import android.net.ConnectivityManager;
@@ -63,7 +64,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     // database gets upgraded properly. At a minimum, please confirm that 'upgradeVersion'
     // is properly propagated through your change.  Not doing so will result in a loss of user
     // settings.
-    private static final int DATABASE_VERSION = 70;
+    private static final int DATABASE_VERSION = 74;
 
     private Context mContext;
 
@@ -946,6 +947,52 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             upgradeVersion = 70;
         }
 
+        if (upgradeVersion == 70) {
+            // Update all built-in bookmarks.  Some of the package names have changed.
+            loadBookmarks(db);
+            upgradeVersion = 71;
+        }
+
+        if (upgradeVersion == 71) {
+             // New setting to specify whether to speak passwords in accessibility mode.
+            db.beginTransaction();
+            SQLiteStatement stmt = null;
+            try {
+                stmt = db.compileStatement("INSERT INTO secure(name,value)"
+                        + " VALUES(?,?);");
+                loadBooleanSetting(stmt, Settings.Secure.ACCESSIBILITY_SPEAK_PASSWORD,
+                        R.bool.def_accessibility_speak_password);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+                if (stmt != null) stmt.close();
+            }
+            upgradeVersion = 72;
+        }
+
+        if (upgradeVersion == 72) {
+            // update vibration settings
+            db.beginTransaction();
+            SQLiteStatement stmt = null;
+            try {
+                stmt = db.compileStatement("INSERT OR REPLACE INTO system(name,value)"
+                        + " VALUES(?,?);");
+                loadBooleanSetting(stmt, Settings.System.VIBRATE_IN_SILENT,
+                        R.bool.def_vibrate_in_silent);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+                if (stmt != null) stmt.close();
+            }
+            upgradeVersion = 73;
+        }
+
+        if (upgradeVersion == 73) {
+            // update vibration settings
+            upgradeVibrateSettingFromNone(db);
+            upgradeVersion = 74;
+        }
+
         // *** Remember to update DATABASE_VERSION above!
 
         if (upgradeVersion != currentVersion) {
@@ -1051,6 +1098,28 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
+    private void upgradeVibrateSettingFromNone(SQLiteDatabase db) {
+        int vibrateSetting = getIntValueFromSystem(db, Settings.System.VIBRATE_ON, 0);
+        // If the ringer vibrate value is invalid, set it to the default
+        if ((vibrateSetting & 3) == AudioManager.VIBRATE_SETTING_OFF) {
+            vibrateSetting = AudioService.getValueForVibrateSetting(0,
+                    AudioManager.VIBRATE_TYPE_RINGER, AudioManager.VIBRATE_SETTING_ONLY_SILENT);
+        }
+        // Apply the same setting to the notification vibrate value
+        vibrateSetting = AudioService.getValueForVibrateSetting(vibrateSetting,
+                AudioManager.VIBRATE_TYPE_NOTIFICATION, vibrateSetting);
+
+        SQLiteStatement stmt = null;
+        try {
+            stmt = db.compileStatement("INSERT OR REPLACE INTO system(name,value)"
+                    + " VALUES(?,?);");
+            loadSetting(stmt, Settings.System.VIBRATE_ON, vibrateSetting);
+        } finally {
+            if (stmt != null)
+                stmt.close();
+        }
+    }
+
     private void upgradeScreenTimeout(SQLiteDatabase db) {
         // Change screen timeout to current default
         db.beginTransaction();
@@ -1086,16 +1155,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      * Loads the default set of bookmarked shortcuts from an xml file.
      *
      * @param db The database to write the values into
-     * @param startingIndex The zero-based position at which bookmarks in this file should begin
      */
-    private int loadBookmarks(SQLiteDatabase db, int startingIndex) {
-        Intent intent = new Intent(Intent.ACTION_MAIN, null);
-        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+    private void loadBookmarks(SQLiteDatabase db) {
         ContentValues values = new ContentValues();
 
         PackageManager packageManager = mContext.getPackageManager();
-        int i = startingIndex;
-
         try {
             XmlResourceParser parser = mContext.getResources().getXml(R.xml.bookmarks);
             XmlUtils.beginDocument(parser, "bookmarks");
@@ -1118,54 +1182,59 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 String pkg = parser.getAttributeValue(null, "package");
                 String cls = parser.getAttributeValue(null, "class");
                 String shortcutStr = parser.getAttributeValue(null, "shortcut");
+                String category = parser.getAttributeValue(null, "category");
 
                 int shortcutValue = shortcutStr.charAt(0);
                 if (TextUtils.isEmpty(shortcutStr)) {
                     Log.w(TAG, "Unable to get shortcut for: " + pkg + "/" + cls);
+                    continue;
                 }
 
-                ActivityInfo info = null;                
-                ComponentName cn = new ComponentName(pkg, cls);
-                try {
-                    info = packageManager.getActivityInfo(cn, 0);
-                } catch (PackageManager.NameNotFoundException e) {
-                    String[] packages = packageManager.canonicalToCurrentPackageNames(
-                            new String[] { pkg });
-                    cn = new ComponentName(packages[0], cls);
+                final Intent intent;
+                final String title;
+                if (pkg != null && cls != null) {
+                    ActivityInfo info = null;
+                    ComponentName cn = new ComponentName(pkg, cls);
                     try {
                         info = packageManager.getActivityInfo(cn, 0);
-                    } catch (PackageManager.NameNotFoundException e1) {
-                        Log.w(TAG, "Unable to add bookmark: " + pkg + "/" + cls, e);
+                    } catch (PackageManager.NameNotFoundException e) {
+                        String[] packages = packageManager.canonicalToCurrentPackageNames(
+                                new String[] { pkg });
+                        cn = new ComponentName(packages[0], cls);
+                        try {
+                            info = packageManager.getActivityInfo(cn, 0);
+                        } catch (PackageManager.NameNotFoundException e1) {
+                            Log.w(TAG, "Unable to add bookmark: " + pkg + "/" + cls, e);
+                            continue;
+                        }
                     }
-                }
-                
-                if (info != null) {
+
+                    intent = new Intent(Intent.ACTION_MAIN, null);
+                    intent.addCategory(Intent.CATEGORY_LAUNCHER);
                     intent.setComponent(cn);
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    values.put(Settings.Bookmarks.INTENT, intent.toUri(0));
-                    values.put(Settings.Bookmarks.TITLE,
-                            info.loadLabel(packageManager).toString());
-                    values.put(Settings.Bookmarks.SHORTCUT, shortcutValue);
-                    db.insert("bookmarks", null, values);
-                    i++;
+                    title = info.loadLabel(packageManager).toString();
+                } else if (category != null) {
+                    intent = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, category);
+                    title = "";
+                } else {
+                    Log.w(TAG, "Unable to add bookmark for shortcut " + shortcutStr
+                            + ": missing package/class or category attributes");
+                    continue;
                 }
+
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                values.put(Settings.Bookmarks.INTENT, intent.toUri(0));
+                values.put(Settings.Bookmarks.TITLE, title);
+                values.put(Settings.Bookmarks.SHORTCUT, shortcutValue);
+                db.delete("bookmarks", "shortcut = ?",
+                        new String[] { Integer.toString(shortcutValue) });
+                db.insert("bookmarks", null, values);
             }
         } catch (XmlPullParserException e) {
             Log.w(TAG, "Got execption parsing bookmarks.", e);
         } catch (IOException e) {
             Log.w(TAG, "Got execption parsing bookmarks.", e);
         }
-
-        return i;
-    }
-
-    /**
-     * Loads the default set of bookmark packages.
-     *
-     * @param db The database to write the values into
-     */
-    private void loadBookmarks(SQLiteDatabase db) {
-        loadBookmarks(db, 0);
     }
 
     /**
@@ -1329,7 +1398,108 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
             loadIntegerSetting(stmt, Settings.System.POINTER_SPEED,
                     R.integer.def_pointer_speed);
+			
+			loadStringSetting(stmt, Settings.System.ACCELEROMETER_COORDINATE,
+                    R.string.def_accelerometer_coordinate);
+            loadBooleanSetting(stmt, Settings.System.IS_SCAN_TF_CARD,
+                    R.bool.def_is_scan_tf_card);
+            loadBooleanSetting(stmt, Settings.System.HIDDEN_GOOGLE_APP,
+        	        R.bool.def_hidden_google_application);
+        			
+            loadStringSetting(stmt, Settings.System.TIME_12_24,
+        	        R.string.def_time_12_24);
+			loadStringSetting(stmt, Settings.System.DISPLAY_ADAPTION_MODE,
+                    R.string.def_screen_adaption_mode);
 
+		    loadBooleanSetting(stmt,Settings.System.IS_SCAN_USB_HOST,
+				    R.bool.def_is_scan_usb_host);
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-11-1 */
+            /* support shortcut keys with color keys for some specific websites and apps */
+    		loadStringSetting(stmt, Settings.System.SHORTCUT_KEY_0,
+    			    R.string.def_shortcut_key_0);
+    		loadStringSetting(stmt, Settings.System.SHORTCUT_KEY_1,
+    			    R.string.def_shortcut_key_1);
+    		loadStringSetting(stmt, Settings.System.SHORTCUT_KEY_2,
+    			    R.string.def_shortcut_key_2);
+    		loadStringSetting(stmt, Settings.System.SHORTCUT_KEY_3,
+    			    R.string.def_shortcut_key_3);
+            /* add by Gary. end   -----------------------------------}} */
+            
+
+			/* add by huanglong */
+			WindowManager wm = (WindowManager)mContext.getSystemService(mContext.WINDOW_SERVICE);
+	        android.view.Display display = wm.getDefaultDisplay();
+	        int width     = display.getRawWidth();
+	        int height    = display.getRawHeight();
+			if((width * 3.0f / (height * 5.0f) != 1.0f) &&
+	           (width * 5.0f / (height * 3.0f) != 1.0)){
+	            loadBooleanSetting(stmt, Settings.System.DISPLAY_ADAPTION_ENABLE,
+					    R.bool.def_display_adation_enable);
+	        }
+    		
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-6 */
+            /* adjust the display area */
+    		loadIntegerSetting(stmt, Settings.System.DISPLAY_AREA_RATIO,
+    			    R.integer.def_display_area_ratio);
+            /* add by Gary. end   -----------------------------------}} */
+
+			loadBooleanSetting(stmt, Settings.System.SMART_BRIGHTNESS_ENABLE,
+                    R.bool.def_smart_brightness_enable);
+			loadBooleanSetting(stmt, Settings.System.SMART_BRIGHTNESS_PREVIEW_ENABLE,
+                    R.bool.def_smart_brightness_preview_enable);
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-10 */
+            /* record the display format and the advance of the mouse in mouse mode */
+            loadStringSetting(stmt, Settings.System.DISPLY_OUTPUT_FORMAT,
+                    R.string.def_display_output_format);
+            loadIntegerSetting(stmt, Settings.System.MOUSE_ADVANCE,
+                    R.integer.def_mouse_advance);
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-11 */
+            /* record the color parameters : brightness, contrast,and saturation */
+            loadIntegerSetting(stmt, Settings.System.COLOR_BRIGHTNESS,
+                    R.integer.def_color_brightness);
+            loadIntegerSetting(stmt, Settings.System.COLOR_CONTRAST,
+                    R.integer.def_color_contrast);
+            loadIntegerSetting(stmt, Settings.System.COLOR_SATURATION,
+                    R.integer.def_color_saturation);
+            /* add by Gary. end   -----------------------------------}} */
+    
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-11 */
+            /* record the audio output type */
+            loadStringSetting(stmt, Settings.System.AUDIO_OUTPUT_TYPE,
+                    R.string.def_audio_output_type);
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2012-2-27 */
+            /* record the audio output channel */
+            loadStringSetting(stmt, Settings.System.AUDIO_OUTPUT_CHANNEL,
+                    R.string.def_audio_output_channel);
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-17 */
+            /* directly power off when long press on the power key */
+            loadBooleanSetting(stmt, Settings.System.DIRECTLY_POWER_OFF,
+                    R.bool.def_directly_power_off);
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2012-4-27 */
+            /* add a switch to control BD folder play mode */
+            loadBooleanSetting(stmt, Settings.System.BD_FOLDER_PLAY_MODE,
+                    R.bool.def_bd_folder_play_mode);
+            /* add by Gary. end   -----------------------------------}} */
+			loadIntegerSetting(stmt, Settings.System.HDMI_OUTPUT_MODE,
+				    R.integer.def_hdmi_output_mode);
         } finally {
             if (stmt != null) stmt.close();
         }
@@ -1413,6 +1583,20 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             loadBooleanSetting(stmt, Settings.Secure.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
                     R.bool.def_networks_available_notification_on);
     
+            /* add by Gary. start {{----------------------------------- */
+            /* 2012-1-6 */
+            /* init the defalut value of the ethernet */
+            loadBooleanSetting(stmt, Settings.Secure.ETHERNET_ON,
+                    R.bool.def_ethernet_on);
+			loadBooleanSetting(stmt, Settings.Secure.ETHERNET_CONF,
+                    R.bool.def_ethernet_conf);
+			loadBooleanSetting(stmt, Settings.Secure.ETHERNET_MODE,
+				    R.bool.def_ethernet_mode);
+			loadStringSetting(stmt, Settings.Secure.ETHERNET_IFNAME,
+				    R.string.def_ethernet_name);
+				
+            /* add by Gary. end   -----------------------------------}} */
+
             String wifiWatchList = SystemProperties.get("ro.com.android.wifi-watchlist");
             if (!TextUtils.isEmpty(wifiWatchList)) {
                 loadSetting(stmt, Settings.Secure.WIFI_WATCHDOG_WATCH_LIST, wifiWatchList);
@@ -1483,6 +1667,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
             loadBooleanSetting(stmt, Settings.Secure.TOUCH_EXPLORATION_ENABLED,
                     R.bool.def_touch_exploration_enabled);
+
+            loadBooleanSetting(stmt, Settings.Secure.ACCESSIBILITY_SPEAK_PASSWORD,
+                    R.bool.def_accessibility_speak_password);
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-25 */
+            /* init the default input method */
+            loadStringSetting(stmt, Settings.Secure.DEFAULT_INPUT_METHOD,
+                    R.string.def_input_method);
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by huanglong ,init the pppoe value*/
+			loadStringSetting(stmt,Settings.Secure.PPPOE_INTERFACE,
+			        R.string.def_pppoe_interface);
+			loadBooleanSetting(stmt,Settings.Secure.PPPOE_AUTO_CONN,
+				    R.bool.def_pppoe_auto_conn);
+			loadBooleanSetting(stmt,Settings.Secure.PPPOE_ENABLE,
+				    R.bool.def_pppoe_enable);
+            // add for facelock
+            loadStringSetting(stmt,"lockscreen.options",
+                    R.string.def_lockscreen_options);
         } finally {
             if (stmt != null) stmt.close();
         }

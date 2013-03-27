@@ -48,6 +48,12 @@ import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.HashSet;
 
+/* add by Gary. start {{----------------------------------- */
+/* 2011-11-1 */
+/* support shortcut keys with color keys for some specific websites and apps */
+import android.view.KeyEvent;
+/* add by Gary. end   -----------------------------------}} */
+
 /**
  * The Settings provider contains global system-level device preferences.
  */
@@ -1386,7 +1392,7 @@ public final class Settings {
         public static final int SCREEN_BRIGHTNESS_MODE_MANUAL = 0;
 
         /**
-         * SCREEN_BRIGHTNESS_MODE value for manual mode.
+         * SCREEN_BRIGHTNESS_MODE value for automatic mode.
          */
         public static final int SCREEN_BRIGHTNESS_MODE_AUTOMATIC = 1;
 
@@ -1884,6 +1890,171 @@ public final class Settings {
         public static final String POINTER_SPEED = "pointer_speed";
 
         /**
+         * To set weather scan the tf card.
+         * add by huanglong
+         * @hide
+         */
+        public static final String IS_SCAN_TF_CARD = "is_scan_tf_card";
+
+
+        /**
+         * To Hidden Google Application.
+         * add by huanglong
+         * @hide 
+         */
+        public static final String HIDDEN_GOOGLE_APP = "hidden_google_application";
+
+		/**
+		 * To use default or special accelerometer coordinate system
+		 * @hide
+		 */
+
+		public static final String ACCELEROMETER_COORDINATE = "accelerometer_coordinate";
+
+		/**
+         * the display mode options.
+         * add by huanglong
+         * @hide 
+         */
+		public static final String DISPLAY_ADAPTION_MODE = "display_adaption_mode";
+
+		/**
+         * enable the screen adaption.
+         * add by huanglong
+         * @hide 
+         */
+		public static final String DISPLAY_ADAPTION_ENABLE = "display_adapter_enable";
+
+		/**
+         * enable the smart brightness in nuclear.
+         * add by huanglong
+         * @hide 
+         */
+		public static final String SMART_BRIGHTNESS_ENABLE = "smart_brightness_enable";
+
+        /**
+         * enable the smart brightness preview mode in nuclear.
+         * add by huanglong
+         * @hide 
+         */
+         public static final String SMART_BRIGHTNESS_PREVIEW_ENABLE = "smart_brightness_enable";
+
+		/**
+         * save the default output mode of hdmi.
+         * add by huanglong
+         * @hide 
+         */
+         public static final String HDMI_OUTPUT_MODE = "hdmi_output_mode";
+		
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-11-1 */
+        /* support shortcut keys with color keys for some specific websites and apps */
+        /**
+         * one shortcut key for websites or apps 
+         */
+        public static final String SHORTCUT_KEY_0 = "shortcut_key_0";
+        /**
+         * one shortcut key for websites or apps 
+         */
+        public static final String SHORTCUT_KEY_1 = "shortcut_key_1";
+        /**
+         * one shortcut key for websites or apps 
+         */
+        public static final String SHORTCUT_KEY_2 = "shortcut_key_2";
+        /**
+         * one shortcut key for websites or apps 
+         */
+        public static final String SHORTCUT_KEY_3 = "shortcut_key_3";
+        
+        public static final String SHORTCUT_PATH_SEPARATOR = "--split--";
+        public static final String SHORTCUT_PATH_TYPE_WEBSITE = "website";
+        public static final String SHORTCUT_PATH_TYPE_APP = "app";
+        
+        public static String findNameByKey(int key){
+            for(int i = 0; i < keyShortcutInfoArray.length; i++){
+                if(keyShortcutInfoArray[i].key == key)
+                    return keyShortcutInfoArray[i].name;
+            }
+            
+            return null;
+        }
+            
+        private static class KeyShortcutInfo {
+            public int    key;
+            public String name;
+            
+            public KeyShortcutInfo(int key, String name){
+                this.key = key;
+                this.name = name;
+            }
+        }
+        
+        private static KeyShortcutInfo[] keyShortcutInfoArray = {
+                                                                    new KeyShortcutInfo(KeyEvent.KEYCODE_PROG_RED   , SHORTCUT_KEY_0),
+                                                                    new KeyShortcutInfo(KeyEvent.KEYCODE_PROG_GREEN , SHORTCUT_KEY_1),
+                                                                    new KeyShortcutInfo(KeyEvent.KEYCODE_PROG_YELLOW, SHORTCUT_KEY_2),
+                                                                    new KeyShortcutInfo(KeyEvent.KEYCODE_PROG_BLUE  , SHORTCUT_KEY_3)
+                                                                 };
+        /* add by Gary. end   -----------------------------------}} */
+
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-6 */
+        /* adjust the display area */
+        /**
+         * record the display area ratio 
+         */
+        public static final String DISPLAY_AREA_RATIO = "display_area_ratio";
+        /* add by Gary. end   -----------------------------------}} */
+        
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-6 */
+        /* set gate for scaning usb host */
+        /**
+         * To set weather scan the usb host.
+         */
+        public static final String IS_SCAN_USB_HOST = "is_scan_usb_host";
+        /* add by Gary. end   -----------------------------------}} */
+        
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-10 */
+        /* record the display format and the advance of the mouse in mouse mode */
+        public static final String DISPLY_OUTPUT_FORMAT = "display_output_format";
+        public static final String MOUSE_ADVANCE = "mouse_advance";
+        /* add by Gary. end   -----------------------------------}} */
+
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-11 */
+        /* record the color parameters : brightness, contrast,and saturation */
+        public static final String COLOR_BRIGHTNESS = "color_brightness";
+        public static final String COLOR_CONTRAST   = "color_contrast";
+        public static final String COLOR_SATURATION = "color_saturation";
+        /* add by Gary. end   -----------------------------------}} */
+
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-11 */
+        /* record the audio output type */
+        public static final String AUDIO_OUTPUT_TYPE = "audio_output_type";
+        /* add by Gary. end   -----------------------------------}} */
+
+        /* add by Gary. start {{----------------------------------- */
+        /* 2012-2-27 */
+        /* record the audio output channel */
+        public static final String AUDIO_OUTPUT_CHANNEL = "audio_output_channel";
+        /* add by Gary. end   -----------------------------------}} */
+
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-12-17 */
+        /* directly power off when long press on the power key */
+        public static final String DIRECTLY_POWER_OFF = "directly_power_off";
+        /* add by Gary. end   -----------------------------------}} */
+
+        /* add by Gary. start {{----------------------------------- */
+        /* 2012-4-27 */
+        /* add a switch to control BD folder play mode */
+        public static final String BD_FOLDER_PLAY_MODE = "bd_folder_play_mode";
+        /* add by Gary. end   -----------------------------------}} */
+
+        /**
          * Settings to backup. This is here so that it's in the same place as the settings
          * keys and easy to update.
          *
@@ -1952,6 +2123,72 @@ public final class Settings {
             SIP_CALL_OPTIONS,
             SIP_RECEIVE_CALLS,
             POINTER_SPEED,
+            ACCELEROMETER_COORDINATE,
+            IS_SCAN_TF_CARD,
+            HIDDEN_GOOGLE_APP,
+            DISPLAY_ADAPTION_MODE,
+            DISPLAY_ADAPTION_ENABLE,
+            SMART_BRIGHTNESS_ENABLE,
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-11-1 */
+            /* support shortcut keys with color keys for some specific websites and apps */
+            SHORTCUT_KEY_0,
+            SHORTCUT_KEY_1,
+            SHORTCUT_KEY_2,
+            SHORTCUT_KEY_3,
+            /* add by Gary. end   -----------------------------------}} */
+            DISPLAY_ADAPTION_ENABLE,
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-6 */
+            /* adjust the display area */
+            DISPLAY_AREA_RATIO,
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-6 */
+            /* set gate for scaning usb host */
+            IS_SCAN_USB_HOST,
+            /* add by Gary. end   -----------------------------------}} */
+            
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-10 */
+            /* record the display format and the advance of the mouse in mouse mode */
+            DISPLY_OUTPUT_FORMAT,
+            MOUSE_ADVANCE,
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-11 */
+            /* record the color parameters : brightness, contrast,and saturation */
+            COLOR_BRIGHTNESS,
+            COLOR_CONTRAST,
+            COLOR_SATURATION,
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-11 */
+            /* record the audio output type */
+            AUDIO_OUTPUT_TYPE,
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2012-2-27 */
+            /* record the audio output channel */
+            AUDIO_OUTPUT_CHANNEL,
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2011-12-17 */
+            /* directly power off when long press on the power key */
+            DIRECTLY_POWER_OFF,
+            /* add by Gary. end   -----------------------------------}} */
+
+            /* add by Gary. start {{----------------------------------- */
+            /* 2012-4-27 */
+            /* add a switch to control BD folder play mode */
+            BD_FOLDER_PLAY_MODE,
+            /* add by Gary. end   -----------------------------------}} */
+            HDMI_OUTPUT_MODE,
         };
 
         // Settings moved to Settings.Secure
@@ -2593,10 +2830,10 @@ public final class Settings {
 
         /**
          * Whether the package installer should allow installation of apps downloaded from
-         * sources other than the Android Market (vending machine).
+         * sources other than Google Play.
          *
          * 1 = allow installing from other sources
-         * 0 = only allow installing from the Android Market
+         * 0 = only allow installing from Google Play
          */
         public static final String INSTALL_NON_MARKET_APPS = "install_non_market_apps";
 
@@ -2752,6 +2989,11 @@ public final class Settings {
          */
         public static final String ENABLED_ACCESSIBILITY_SERVICES =
             "enabled_accessibility_services";
+
+        /**
+         * Whether to speak passwords while in accessibility mode.
+         */
+        public static final String ACCESSIBILITY_SPEAK_PASSWORD = "speak_password";
 
         /**
          * If injection of accessibility enhancing JavaScript scripts
@@ -2928,6 +3170,17 @@ public final class Settings {
          * least-recently-used excess networks will be removed.
          */
         public static final String WIFI_NUM_OPEN_NETWORKS_KEPT = "wifi_num_open_networks_kept";
+        /**
+         * Ethernet related configurations
+         */
+        public static final String ETHERNET_ON      = "eth_on";
+        public static final String ETHERNET_MODE    = "eth_mode";
+        public static final String ETHERNET_IP      = "eth_ip";
+        public static final String ETHERNET_MASK    = "eth_netmask";
+        public static final String ETHERNET_DNS     = "eth_dns";
+        public static final String ETHERNET_ROUTE   = "eth_route";
+        public static final String ETHERNET_CONF    = "eth_conf";
+        public static final String ETHERNET_IFNAME  = "eth_ifname";
 
         /**
          * Whether the Wi-Fi should be on.  Only the Wi-Fi service should touch this.
@@ -3105,6 +3358,14 @@ public final class Settings {
          */
         public static final String WIFI_WATCHDOG_BLACKLIST_FOLLOWUP_INTERVAL_MS =
                 "wifi_watchdog_blacklist_followup_interval_ms";
+
+        /**
+         * Setting to turn off poor network avoidance on Wi-Fi. Feature is disabled by default and
+         * the setting needs to be set to 1 to enable it.
+         * @hide
+         */
+        public static final String WIFI_WATCHDOG_POOR_NETWORK_TEST_ENABLED =
+                "wifi_watchdog_poor_network_test_enabled";
 
         /**
          * Setting to turn off walled garden test on Wi-Fi. Feature is enabled by default and
@@ -3629,11 +3890,20 @@ public final class Settings {
                 "pdp_watchdog_max_pdp_reset_fail_count";
 
         /**
-         * The number of milliseconds to delay when checking for data stalls
+         * The number of milliseconds to delay when checking for data stalls during
+         * non-aggressive detection. (screen is turned off.)
          * @hide
          */
-        public static final String DATA_STALL_ALARM_DELAY_IN_MS =
-                "data_stall_alarm_delay_in_ms";
+        public static final String DATA_STALL_ALARM_NON_AGGRESSIVE_DELAY_IN_MS =
+                "data_stall_alarm_non_aggressive_delay_in_ms";
+
+        /**
+         * The number of milliseconds to delay when checking for data stalls during
+         * aggressive detection. (screen on or suspected data stall)
+         * @hide
+         */
+        public static final String DATA_STALL_ALARM_AGGRESSIVE_DELAY_IN_MS =
+                "data_stall_alarm_aggressive_delay_in_ms";
 
         /**
          * The interval in milliseconds at which to check gprs registration
@@ -4019,28 +4289,6 @@ public final class Settings {
         public static final String SETUP_PREPAID_DETECTION_REDIR_HOST =
                 "setup_prepaid_detection_redir_host";
 
-        /**
-         * Whether the screensaver is enabled.
-         * @hide
-         */
-        public static final String SCREENSAVER_ENABLED = "screensaver_enabled";
-
-        /**
-         * The user's chosen screensaver component.
-         *
-         * This component will be launched by the PhoneWindowManager after a timeout when not on
-         * battery, or upon dock insertion (if SCREENSAVER_ACTIVATE_ON_DOCK is set to 1).
-         * @hide
-         */
-        public static final String SCREENSAVER_COMPONENT = "screensaver_component";
-
-        /**
-         * Whether the screensaver should be automatically launched when the device is inserted
-         * into a (desk) dock.
-         * @hide
-         */
-        public static final String SCREENSAVER_ACTIVATE_ON_DOCK = "screensaver_activate_on_dock";
-
         /** {@hide} */
         public static final String NETSTATS_ENABLED = "netstats_enabled";
         /** {@hide} */
@@ -4081,6 +4329,24 @@ public final class Settings {
         public static final String CONTACTS_PREAUTH_URI_EXPIRATION =
                 "contacts_preauth_uri_expiration";
 
+		/**
+         * add by huanglong , use to save the pppoe interface .
+         * @hide
+         */
+         public static final String PPPOE_INTERFACE = "pppoe_interface";
+
+	    /**
+         * add by huanglong , use to set weather pppoe auto connect to internet .
+         * @hide
+         */
+		 public static final String PPPOE_AUTO_CONN = "pppoe_auto_conn";
+
+        /**
+         * add by huanglong , use to set weather enable pppoe .
+         * @hide
+         */
+		 public static final String PPPOE_ENABLE = "pppoe_enable";
+
         /**
          * This are the settings to be backed up.
          *
@@ -4101,6 +4367,7 @@ public final class Settings {
             ENABLED_ACCESSIBILITY_SERVICES,
             TOUCH_EXPLORATION_ENABLED,
             ACCESSIBILITY_ENABLED,
+            ACCESSIBILITY_SPEAK_PASSWORD,
             TTS_USE_DEFAULTS,
             TTS_DEFAULT_RATE,
             TTS_DEFAULT_PITCH,
@@ -4118,7 +4385,10 @@ public final class Settings {
             MOUNT_UMS_NOTIFY_ENABLED,
             UI_NIGHT_MODE,
             LOCK_SCREEN_OWNER_INFO,
-            LOCK_SCREEN_OWNER_INFO_ENABLED
+            LOCK_SCREEN_OWNER_INFO_ENABLED,
+            PPPOE_INTERFACE,
+            PPPOE_AUTO_CONN,
+            PPPOE_ENABLE,
         };
 
         /**

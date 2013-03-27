@@ -34,6 +34,7 @@
 #include <surfaceflinger/IGraphicBufferAlloc.h>
 #include <surfaceflinger/ISurfaceComposer.h>
 #include <surfaceflinger/ISurfaceComposerClient.h>
+#include <surfaceflinger/ISurfaceClient.h>
 
 #include "Barrier.h"
 #include "Layer.h"
@@ -46,6 +47,7 @@ namespace android {
 
 class Client;
 class DisplayHardware;
+class SurfaceFlinger;
 class Layer;
 class LayerDim;
 class LayerScreenshot;
@@ -171,7 +173,11 @@ public:
                                                             int orientation, uint32_t flags);
     virtual int                         setOrientation(DisplayID dpy, int orientation, uint32_t flags);
     virtual bool                        authenticateSurfaceTexture(const sp<ISurfaceTexture>& surface) const;
-
+    virtual int                         setDisplayProp(int cmd,int param0,int param1,int param2);
+    virtual int                         getDisplayProp(int cmd,int param0,int param1);
+    virtual void                        registerClient(const sp<ISurfaceClient>& client);
+    virtual void                        NotifyFramebufferChanged_l(int event, int param = 0);
+    virtual void                        NotifyFBConverted_l(unsigned int addr1,unsigned int addr2,int bufid,int64_t proctime);
     virtual status_t captureScreen(DisplayID dpy,
             sp<IMemoryHeap>* heap,
             uint32_t* width, uint32_t* height,
@@ -204,7 +210,10 @@ public:
 
     GLuint getProtectedTexName() const { return mProtectedTexName; }
 
+    int         setDisplayParameter(uint32_t cmd,uint32_t  value);
 
+    uint32_t    getDisplayParameter(uint32_t cmd);
+    void        removeNotificationClient(pid_t pid);
     class MessageDestroyGLTexture : public MessageBase {
         GLuint texture;
     public:
@@ -225,6 +234,22 @@ private:
     friend class LayerBase;
     friend class LayerBaseClient;
     friend class Layer;
+    class NotificationClient : public IBinder::DeathRecipient 
+    {
+        public:
+            NotificationClient(const sp<SurfaceFlinger>& audioFlinger,
+                                     const sp<ISurfaceClient>& client,
+                                     pid_t pid);
+            virtual             ~NotificationClient();
+            sp<ISurfaceClient>    client() { return mClient; }
+            virtual     void        binderDied(const wp<IBinder>& who);
+        private:
+            NotificationClient(const NotificationClient&);
+            NotificationClient& operator = (const NotificationClient&);
+            sp<SurfaceFlinger>          mSurfaceFlinger;
+            pid_t                       mPid;
+            sp<ISurfaceClient>          mClient;
+    };
 
     sp<ISurface> createSurface(
             ISurfaceComposerClient::surface_data_t* params,
@@ -345,6 +370,7 @@ private:
                 Condition               mTransactionCV;
                 SortedVector< sp<LayerBase> > mLayerPurgatory;
                 bool                    mTransationPending;
+                Vector< sp<LayerBase> > mLayersPendingRemoval;
 
                 // protected by mStateLock (but we could use another lock)
                 GraphicPlane                mGraphicPlanes[1];
@@ -353,6 +379,7 @@ private:
 
                 // access must be protected by mInvalidateLock
     mutable     Mutex                       mInvalidateLock;
+    mutable     Mutex                       mClientLock;
                 Region                      mInvalidateRegion;
 
                 // constant members (no synchronization needed for access)
@@ -373,6 +400,7 @@ private:
                 bool                        mHwWorkListDirty;
                 int32_t                     mElectronBeamAnimationMode;
                 Vector< sp<LayerBase> >     mVisibleLayersSortedByZ;
+                DefaultKeyedVector< pid_t, sp<NotificationClient> >    mNotificationClients;
 
 
                 // don't use a lock for these, we don't care
@@ -404,6 +432,10 @@ private:
 
    // only written in the main thread, only read in other threads
    volatile     int32_t                     mSecureFrameBuffer;
+
+                int                         mDispWidth;
+                int                         mDispHeight;
+                int                         mSetDispSize;
 };
 
 // ---------------------------------------------------------------------------

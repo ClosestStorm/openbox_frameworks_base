@@ -105,6 +105,7 @@ LOCAL_SRC_FILES += \
 	core/java/android/content/pm/IPackageDataObserver.aidl \
 	core/java/android/content/pm/IPackageDeleteObserver.aidl \
 	core/java/android/content/pm/IPackageInstallObserver.aidl \
+	core/java/android/content/pm/IResolveListener.aidl \
 	core/java/android/content/pm/IPackageManager.aidl \
 	core/java/android/content/pm/IPackageMoveObserver.aidl \
 	core/java/android/content/pm/IPackageStatsObserver.aidl \
@@ -125,6 +126,7 @@ LOCAL_SRC_FILES += \
 	core/java/android/os/INetworkManagementService.aidl \
 	core/java/android/os/IPermissionController.aidl \
 	core/java/android/os/IPowerManager.aidl \
+	core/java/android/os/IDynamicPManager.aidl \
 	core/java/android/os/IRemoteCallback.aidl \
 	core/java/android/os/IVibratorService.aidl \
 	core/java/android/service/wallpaper/IWallpaperConnection.aidl \
@@ -140,6 +142,10 @@ LOCAL_SRC_FILES += \
 	core/java/android/view/IWindow.aidl \
 	core/java/android/view/IWindowManager.aidl \
 	core/java/android/view/IWindowSession.aidl \
+	core/java/android/view/IDisplayManager.aidl \
+	core/java/android/wifidisplay/IWifiDisplayThread.aidl \
+	core/java/android/content/pm/ResolveListenerBase.java \
+	core/java/android/wifidisplay/IWifiDisplayManager.aidl \
 	core/java/android/speech/IRecognitionListener.aidl \
 	core/java/android/speech/IRecognitionService.aidl \
 	core/java/android/speech/tts/ITextToSpeechCallback.aidl \
@@ -196,6 +202,7 @@ LOCAL_SRC_FILES += \
 	telephony/java/com/android/internal/telephony/IWapPushManager.aidl \
 	wifi/java/android/net/wifi/IWifiManager.aidl \
 	wifi/java/android/net/wifi/p2p/IWifiP2pManager.aidl \
+	ethernet/java/android/net/ethernet/IEthernetManager.aidl \
 	telephony/java/com/android/internal/telephony/IExtendedNetworkService.aidl \
 	voip/java/android/net/sip/ISipSession.aidl \
 	voip/java/android/net/sip/ISipSessionListener.aidl \
@@ -398,6 +405,7 @@ framework_docs_LOCAL_DROIDDOC_OPTIONS := \
     -since ./frameworks/base/api/12.xml 12 \
     -since ./frameworks/base/api/13.xml 13 \
     -since ./frameworks/base/api/14.txt 14 \
+    -since ./frameworks/base/api/15.txt 15 \
 		-werror -hide 113 \
 		-overview $(LOCAL_PATH)/core/java/overview.html
 
@@ -444,10 +452,14 @@ web_docs_sample_code_flags := \
 		            resources/samples/JetBoy "JetBoy" \
 		-samplecode $(sample_dir)/LunarLander \
 		            resources/samples/LunarLander "Lunar Lander" \
+		-samplecode $(sample_dir)/training/ads-and-ux \
+		            resources/samples/training/ads-and-ux "Mobile Advertisement Integration" \
 		-samplecode $(sample_dir)/MultiResolution \
 		            resources/samples/MultiResolution "Multiple Resolutions" \
 		-samplecode $(sample_dir)/NFCDemo \
 		            resources/samples/NFCDemo "NFC Demo" \
+		-samplecode $(sample_dir)/training/multiscreen/newsreader \
+		            resources/samples/newsreader "News Reader" \
 		-samplecode $(sample_dir)/NotePad \
 		            resources/samples/NotePad "Note Pad" \
 		-samplecode $(sample_dir)/SpellChecker/SampleSpellCheckerService \
@@ -478,6 +490,8 @@ web_docs_sample_code_flags := \
 		            resources/samples/TicTacToeLib "TicTacToeLib" \
 		-samplecode $(sample_dir)/TicTacToeMain \
 		            resources/samples/TicTacToeMain "TicTacToeMain" \
+		-samplecode $(sample_dir)/ToyVpn \
+		            resources/samples/ToyVpn "Toy VPN Client" \
 		-samplecode $(sample_dir)/USB \
 		            resources/samples/USB "USB" \
 		-samplecode $(sample_dir)/WeatherListWidget \
@@ -495,7 +509,10 @@ web_docs_sample_code_flags := \
 		-samplecode $(sample_dir)/XmlAdapters \
 		            resources/samples/XmlAdapters "XML Adapters" \
 		-samplecode $(sample_dir)/TtsEngine \
-		            resources/samples/TtsEngine "Text To Speech Engine"
+		            resources/samples/TtsEngine "Text To Speech Engine" \
+		-samplecode $(sample_dir)/training/device-management-policy \
+		            resources/samples/training/device-management-policy "Device Management Policy"
+
 
 ## SDK version identifiers used in the published docs
   # major[.minor] version for current SDK. (full releases only)

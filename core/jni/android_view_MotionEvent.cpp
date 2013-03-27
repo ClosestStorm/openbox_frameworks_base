@@ -154,8 +154,8 @@ static bool validatePointerCoordsObjArray(JNIEnv* env, jobjectArray pointerCoord
 
 static bool validatePointerIndex(JNIEnv* env, jint pointerIndex, size_t pointerCount) {
     if (pointerIndex < 0 || size_t(pointerIndex) >= pointerCount) {
-        jniThrowException(env, "java/lang/IllegalArgumentException",
-                "pointerIndex out of range");
+//        jniThrowException(env, "java/lang/IllegalArgumentException",
+//                "pointerIndex out of range");
         return false;
     }
     return true;
@@ -674,6 +674,12 @@ static void android_view_MotionEvent_nativeScale(JNIEnv* env, jclass clazz,
     MotionEvent* event = reinterpret_cast<MotionEvent*>(nativePtr);
     event->scale(scale);
 }
+static void android_view_MotionEvent_nativeScaleXY(JNIEnv* env, jclass clazz,
+        jint nativePtr, jfloat scalex, jfloat scaley) {
+    MotionEvent* event = reinterpret_cast<MotionEvent*>(nativePtr);
+    event->scale(scalex,scaley);
+}
+
 
 static void android_view_MotionEvent_nativeTransform(JNIEnv* env, jclass clazz,
         jint nativePtr, jobject matrixObj) {
@@ -820,6 +826,10 @@ static JNINativeMethod gMotionEventMethods[] = {
     { "nativeScale",
             "(IF)V",
             (void*)android_view_MotionEvent_nativeScale },
+	{ "nativeScaleXY",
+			"(IFF)V",
+			(void*)android_view_MotionEvent_nativeScaleXY },
+
     { "nativeTransform",
             "(ILandroid/graphics/Matrix;)V",
             (void*)android_view_MotionEvent_nativeTransform },

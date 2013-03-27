@@ -262,6 +262,13 @@ public class WifiP2pManager {
     /** @hide */
     public static final int RESPONSE_GROUP_INFO                     = BASE + 27;
 
+    /** @hide */
+    public static final int STOP_DISCOVER_PEERS                     = BASE + 28;
+    /** @hide */
+    public static final int STOP_DISCOVER_PEERS_FAILED              = BASE + 29;
+    /** @hide */
+    public static final int STOP_DISCOVER_PEERS_SUCCEEDED           = BASE + 30;
+
     /**
      * Create a new WifiP2pManager instance. Applications use
      * {@link android.content.Context#getSystemService Context.getSystemService()} to retrieve
@@ -376,6 +383,7 @@ public class WifiP2pManager {
                         break;
                     /* ActionListeners grouped together */
                     case WifiP2pManager.DISCOVER_PEERS_FAILED:
+                    case WifiP2pManager.STOP_DISCOVER_PEERS_FAILED:
                     case WifiP2pManager.CONNECT_FAILED:
                     case WifiP2pManager.CANCEL_CONNECT_FAILED:
                     case WifiP2pManager.CREATE_GROUP_FAILED:
@@ -386,6 +394,7 @@ public class WifiP2pManager {
                         break;
                     /* ActionListeners grouped together */
                     case WifiP2pManager.DISCOVER_PEERS_SUCCEEDED:
+                    case WifiP2pManager.STOP_DISCOVER_PEERS_SUCCEEDED:
                     case WifiP2pManager.CONNECT_SUCCEEDED:
                     case WifiP2pManager.CANCEL_CONNECT_SUCCEEDED:
                     case WifiP2pManager.CREATE_GROUP_SUCCEEDED:
@@ -500,6 +509,23 @@ public class WifiP2pManager {
     public void discoverPeers(Channel c, ActionListener listener) {
         if (c == null) return;
         c.mAsyncChannel.sendMessage(DISCOVER_PEERS, 0, c.putListener(listener));
+    }
+
+    /**
+     * Cancel the current peer discovery process.
+     *
+     * <p> The function call immediately returns after sending a stop discovery request
+     * to the framework. The application is notified of a success or failure to stop
+     * discovery through listener callbacks {@link ActionListener#onSuccess} or
+     * {@link ActionListener#onFailure}.
+     *
+     * @param c is the channel created at {@link #initialize}
+     * @param listener for callbacks on success or failure. Can be null.
+     * @hide
+     */
+    public void cancelDiscoverPeers(Channel c, ActionListener listener) {
+        if (c == null) return;
+        c.mAsyncChannel.sendMessage(STOP_DISCOVER_PEERS, 0, c.putListener(listener));
     }
 
     /**

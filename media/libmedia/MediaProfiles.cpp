@@ -372,10 +372,10 @@ MediaProfiles::getCameraId(const char** atts)
 void MediaProfiles::addStartTimeOffset(int cameraId, const char** atts)
 {
     int offsetTimeMs = 700;
-    if (atts[2]) {
+    /*if (atts[2]) {
         CHECK(!strcmp("startOffsetMs", atts[2]));
         offsetTimeMs = atoi(atts[3]);
-    }
+    }*/
 
     LOGV("%s: cameraId=%d, offset=%d ms", __func__, cameraId, offsetTimeMs);
     mStartTimeOffsets.replaceValueFor(cameraId, offsetTimeMs);

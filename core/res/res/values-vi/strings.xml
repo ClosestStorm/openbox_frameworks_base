@@ -137,6 +137,9 @@
     <string name="turn_off_radio" msgid="8198784949987062346">"Tắt không dây"</string>
     <string name="screen_lock" msgid="799094655496098153">"Khoá màn hình"</string>
     <string name="power_off" msgid="4266614107412865048">"Tắt nguồn"</string>
+    <string name="silent_mode_silent" msgid="319298163018473078">"Tắt chuông"</string>
+    <string name="silent_mode_vibrate" msgid="7072043388581551395">"Chuông rung"</string>
+    <string name="silent_mode_ring" msgid="8592241816194074353">"Bật chuông"</string>
     <string name="shutdown_progress" msgid="2281079257329981203">"Đang tắt…"</string>
     <string name="shutdown_confirm" product="tablet" msgid="3385745179555731470">"Máy tính bảng của bạn sẽ tắt."</string>
     <string name="shutdown_confirm" product="default" msgid="649792175242821353">"Điện thoại của bạn sẽ tắt."</string>
@@ -359,8 +362,8 @@
     <string name="permdesc_readFrameBuffer" msgid="7530020370469942528">"Cho phép ứng dụng đọc nội dung của bộ đệm khung."</string>
     <string name="permlab_modifyAudioSettings" msgid="6095859937069146086">"thay đổi cài đặt âm thanh của bạn"</string>
     <string name="permdesc_modifyAudioSettings" msgid="5793461287365991922">"Cho phép ứng dụng sửa đổi cài đặt âm thanh chung chẳng hạn như âm lượng và định tuyến."</string>
-    <string name="permlab_recordAudio" msgid="3876049771427466323">"ghi âm thanh"</string>
-    <string name="permdesc_recordAudio" msgid="6493228261176552356">"Cho phép ứng dụng truy cập vào đường dẫn bản ghi âm thanh."</string>
+    <string name="permlab_recordAudio" msgid="3876049771427466323">"ghi âm"</string>
+    <string name="permdesc_recordAudio" msgid="6493228261176552356">"Cho phép ứng dụng truy cập vào đường dẫn bản ghi âm."</string>
     <string name="permlab_camera" msgid="3616391919559751192">"chụp ảnh và quay video"</string>
     <string name="permdesc_camera" msgid="6004878235852154239">"Cho phép ứng dụng chụp ảnh và quay video bằng máy ảnh. Quyền này cho phép ứng dụng thu thập ảnh mà máy ảnh chụp vào bất kỳ thời điểm nào."</string>
     <string name="permlab_brick" product="tablet" msgid="2961292205764488304">"vô hiệu hóa vĩnh viễn máy tính bảng"</string>
@@ -959,6 +962,9 @@
     <item quantity="one" msgid="1634101450343277345">"Mở mạng Wi-Fi khả dụng"</item>
     <item quantity="other" msgid="7915895323644292768">"Mở mạng Wi-Fi khả dụng"</item>
   </plurals>
+    <string name="wifi_available_sign_in" msgid="9157196203958866662">"Đăng nhập vào mạng Wi-Fi"</string>
+    <!-- no translation found for wifi_available_sign_in_detailed (6797764740339907572) -->
+    <skip />
     <string name="wifi_watchdog_network_disabled" msgid="7904214231651546347">"Không thể kết nối với Wi-Fi"</string>
     <string name="wifi_watchdog_network_disabled_detailed" msgid="4917472096696322767">" có kết nối internet kém."</string>
     <string name="wifi_p2p_dialog_title" msgid="97611782659324517">"Wi-Fi Direct"</string>

@@ -136,7 +136,14 @@ public abstract class StatusBar extends SystemUI implements CommandQueue.Callbac
         lp.gravity = getStatusBarGravity();
         lp.setTitle("StatusBar");
         lp.packageName = mContext.getPackageName();
-        lp.windowAnimations = R.style.Animation_StatusBar;
+		if(lp.gravity == (Gravity.TOP | Gravity.FILL_HORIZONTAL))
+		{
+        	lp.windowAnimations = R.style.Animation_StatusBar;
+		}
+		else
+		{
+			lp.windowAnimations = R.style.Animation_TabletStatusBar;
+		}
         WindowManagerImpl.getDefault().addView(sb, lp);
 
         if (SPEW) {

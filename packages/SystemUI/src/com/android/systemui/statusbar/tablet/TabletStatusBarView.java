@@ -16,7 +16,11 @@
 
 package com.android.systemui.statusbar.tablet;
 
+import com.android.systemui.R;
+import com.android.systemui.statusbar.policy.KeyButtonView;
+
 import android.content.Context;
+import android.content.res.Configuration;
 import android.os.Handler;
 import android.util.AttributeSet;
 import android.util.Slog;
@@ -26,6 +30,7 @@ import android.widget.FrameLayout;
 
 public class TabletStatusBarView extends FrameLayout {
     private Handler mHandler;
+	private boolean displayLock;
 
     private final int MAX_PANELS = 5;
     private final View[] mIgnoreChildren = new View[MAX_PANELS];
@@ -73,7 +78,27 @@ public class TabletStatusBarView extends FrameLayout {
         }
         return super.onInterceptTouchEvent(ev);
     }
-
+	
+	@Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh){
+		KeyButtonView volume_up=(KeyButtonView)findViewById(R.id.volume_up);
+		KeyButtonView volume_down=(KeyButtonView)findViewById(R.id.volume_down);
+		KeyButtonView menu =(KeyButtonView)findViewById(R.id.menu);
+		View navigationArea=(View)findViewById(R.id.navigationArea);
+		View mNotificationArea = (View)findViewById(R.id.notificationArea);
+		if(displayLock){
+            if(w<navigationArea.getWidth()+mNotificationArea.getWidth()){
+			volume_up.setVisibility(View.GONE);
+			volume_down.setVisibility(View.GONE);
+			menu.setVisibility(View.GONE);
+		    }else{
+		     volume_up.setVisibility(View.VISIBLE);
+			 volume_down.setVisibility(View.VISIBLE);
+			 menu.setVisibility(View.VISIBLE);
+		    }
+		}
+		
+	}
     private boolean eventInside(View v, MotionEvent ev) {
         // assume that x and y are window coords because we are.
         final int x = (int)ev.getX();
@@ -93,7 +118,22 @@ public class TabletStatusBarView extends FrameLayout {
     public void setHandler(Handler h) {
         mHandler = h;
     }
-
+    public void setShowVolume(boolean show,Context mContext){
+        displayLock=show;
+		Configuration config = mContext.getResources().getConfiguration();
+		KeyButtonView volume_up=(KeyButtonView)findViewById(R.id.volume_up);
+		KeyButtonView volume_down=(KeyButtonView)findViewById(R.id.volume_down);
+		KeyButtonView menu =(KeyButtonView)findViewById(R.id.menu);
+		if(config.screenWidthDp>480&&show){
+		   volume_up.setVisibility(View.VISIBLE);
+		   volume_down.setVisibility(View.VISIBLE);
+		   menu.setVisibility(View.VISIBLE);
+		}else{
+		   volume_up.setVisibility(View.GONE);
+		   volume_down.setVisibility(View.GONE);
+		   menu.setVisibility(View.GONE);
+		}
+	}
     /**
      * Let the status bar know that if you tap on ignore while panel is showing, don't do anything.
      * 

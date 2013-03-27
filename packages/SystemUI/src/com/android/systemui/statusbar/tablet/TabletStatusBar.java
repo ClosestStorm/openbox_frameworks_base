@@ -80,12 +80,15 @@ import com.android.systemui.statusbar.SignalClusterView;
 import com.android.systemui.statusbar.StatusBar;
 import com.android.systemui.statusbar.StatusBarIconView;
 import com.android.systemui.statusbar.policy.BatteryController;
+import com.android.systemui.statusbar.policy.DisplayController;
 import com.android.systemui.statusbar.policy.BluetoothController;
 import com.android.systemui.statusbar.policy.CompatModeButton;
 import com.android.systemui.statusbar.policy.LocationController;
 import com.android.systemui.statusbar.policy.NetworkController;
 import com.android.systemui.statusbar.policy.Prefs;
+import com.android.systemui.statusbar.policy.SoundController;
 
+import android.os.storage.StorageManager;
 public class TabletStatusBar extends StatusBar implements
         HeightReceiver.OnBarHeightChangedListener,
         InputMethodsPanel.OnHardKeyboardEnabledChangeListener {
@@ -143,6 +146,9 @@ public class TabletStatusBar extends StatusBar implements
     View mHomeButton;
     View mMenuButton;
     View mRecentButton;
+	View mVolumeUpButton;
+	View mVolumeDownButton;
+	View mPower;
 
     ViewGroup mFeedbackIconArea; // notification icons, IME icon, compat icon
     InputMethodButton mInputMethodSwitchButton;
@@ -166,9 +172,10 @@ public class TabletStatusBar extends StatusBar implements
     BluetoothController mBluetoothController;
     LocationController mLocationController;
     NetworkController mNetworkController;
-
+	DisplayController mDisplayController;
+	SoundController mSoundController;
+	
     ViewGroup mBarContents;
-    LayoutTransition mBarContentsLayoutTransition;
 
     // hide system chrome ("lights out") support
     View mShadow;
@@ -194,6 +201,7 @@ public class TabletStatusBar extends StatusBar implements
     // used to notify status bar for suppressing notification LED
     private boolean mPanelSlightlyVisible;
 
+	private StorageManager mStorageManager;
     public Context getContext() { return mContext; }
 
     protected void addPanelWindows() {
@@ -219,11 +227,6 @@ public class TabletStatusBar extends StatusBar implements
 
         // network icons: either a combo icon that switches between mobile and data, or distinct
         // mobile and data icons
-        final ImageView comboRSSI = 
-                (ImageView)mNotificationPanel.findViewById(R.id.network_signal);
-        if (comboRSSI != null) {
-            mNetworkController.addCombinedSignalIconView(comboRSSI);
-        }
         final ImageView mobileRSSI = 
                 (ImageView)mNotificationPanel.findViewById(R.id.mobile_signal);
         if (mobileRSSI != null) {
@@ -234,14 +237,14 @@ public class TabletStatusBar extends StatusBar implements
         if (wifiRSSI != null) {
             mNetworkController.addWifiIconView(wifiRSSI);
         }
+        mNetworkController.addWifiLabelView(
+                (TextView)mNotificationPanel.findViewById(R.id.wifi_text));
 
         mNetworkController.addDataTypeIconView(
-                (ImageView)mNotificationPanel.findViewById(R.id.network_type));
-        mNetworkController.addDataDirectionOverlayIconView(
-                (ImageView)mNotificationPanel.findViewById(R.id.network_direction));
-        mNetworkController.addLabelView(
-                (TextView)mNotificationPanel.findViewById(R.id.network_text));
-        mNetworkController.addLabelView(
+                (ImageView)mNotificationPanel.findViewById(R.id.mobile_type));
+        mNetworkController.addMobileLabelView(
+                (TextView)mNotificationPanel.findViewById(R.id.mobile_text));
+        mNetworkController.addCombinedLabelView(
                 (TextView)mBarContents.findViewById(R.id.network_text));
 
         mStatusBarView.setIgnoreChildren(0, mNotificationTrigger, mNotificationPanel);
@@ -394,6 +397,11 @@ public class TabletStatusBar extends StatusBar implements
     @Override
     public void start() {
         super.start(); // will add the main bar view
+
+		// storage
+        mStorageManager = (StorageManager) mContext.getSystemService(Context.STORAGE_SERVICE);
+        mStorageManager.registerListener(
+                new com.android.systemui.usb.StorageNotification(mContext));
     }
 
     @Override
@@ -461,19 +469,6 @@ public class TabletStatusBar extends StatusBar implements
         }
 
         mBarContents = (ViewGroup) sb.findViewById(R.id.bar_contents);
-        // layout transitions for the status bar's contents
-        mBarContentsLayoutTransition = new LayoutTransition();
-        // add/removal will fade as normal
-        mBarContentsLayoutTransition.setAnimator(LayoutTransition.APPEARING,
-                ObjectAnimator.ofFloat(null, "alpha", 0f, 1f));
-        mBarContentsLayoutTransition.setAnimator(LayoutTransition.DISAPPEARING,
-                ObjectAnimator.ofFloat(null, "alpha", 1f, 0f));
-        // no animations for siblings on change: just jump into place please
-        mBarContentsLayoutTransition.setAnimator(LayoutTransition.CHANGE_APPEARING, null);
-        mBarContentsLayoutTransition.setAnimator(LayoutTransition.CHANGE_DISAPPEARING, null);
-        // quick like bunny
-        mBarContentsLayoutTransition.setDuration(250 * (DEBUG?10:1));
-        mBarContents.setLayoutTransition(mBarContentsLayoutTransition);
 
         // the whole right-hand side of the bar
         mNotificationArea = sb.findViewById(R.id.notificationArea);
@@ -506,6 +501,8 @@ public class TabletStatusBar extends StatusBar implements
         mLocationController = new LocationController(mContext); // will post a notification
 
         mBatteryController = new BatteryController(mContext);
+		mDisplayController = new DisplayController(mContext);
+		mSoundController = new SoundController(mContext);
         mBatteryController.addIconView((ImageView)sb.findViewById(R.id.battery));
         mBluetoothController = new BluetoothController(mContext);
         mBluetoothController.addIconView((ImageView)sb.findViewById(R.id.bluetooth));
@@ -520,9 +517,41 @@ public class TabletStatusBar extends StatusBar implements
         mNavigationArea = (ViewGroup) sb.findViewById(R.id.navigationArea);
         mHomeButton = mNavigationArea.findViewById(R.id.home);
         mMenuButton = mNavigationArea.findViewById(R.id.menu);
+
+		mPower = mNavigationArea.findViewById(R.id.power);
+		if(mContext.getResources().getBoolean(R.bool.hasPowerButton)){
+			mPower.setVisibility(View.VISIBLE);
+		}else{
+			mPower.setVisibility(View.GONE);
+		}
+
+		mVolumeDownButton = mNavigationArea.findViewById(R.id.volume_down);
+		mVolumeUpButton = mNavigationArea.findViewById(R.id.volume_up);
+		if(mContext.getResources().getBoolean(R.bool.hasVolumeButton))
+		{
+			mVolumeUpButton.setVisibility(View.VISIBLE);
+			mVolumeDownButton.setVisibility(View.VISIBLE);
+		}		
+		
         mRecentButton = mNavigationArea.findViewById(R.id.recent_apps);
         mRecentButton.setOnClickListener(mOnClickListener);
-        mNavigationArea.setLayoutTransition(mBarContentsLayoutTransition);
+
+        LayoutTransition lt = new LayoutTransition();
+        lt.setDuration(250);
+        // don't wait for these transitions; we just want icons to fade in/out, not move around
+        lt.setDuration(LayoutTransition.CHANGE_APPEARING, 0);
+        lt.setDuration(LayoutTransition.CHANGE_DISAPPEARING, 0);
+        lt.addTransitionListener(new LayoutTransition.TransitionListener() {
+            public void endTransition(LayoutTransition transition, ViewGroup container,
+                    View view, int transitionType) {
+                // ensure the menu button doesn't stick around on the status bar after it's been
+                // removed
+                mBarContents.invalidate();
+            }
+            public void startTransition(LayoutTransition transition, ViewGroup container,
+                    View view, int transitionType) {}
+        });
+        mNavigationArea.setLayoutTransition(lt);
         // no multi-touch on the nav buttons
         mNavigationArea.setMotionEventSplittingEnabled(false);
 
@@ -534,6 +563,7 @@ public class TabletStatusBar extends StatusBar implements
 
         mCompatModeButton = (CompatModeButton) sb.findViewById(R.id.compatModeButton);
         mCompatModeButton.setOnClickListener(mOnClickListener);
+        mCompatModeButton.setVisibility(View.GONE);
 
         // for redirecting errant bar taps to the IME
         mFakeSpaceBar = sb.findViewById(R.id.fake_space_bar);
@@ -949,6 +979,7 @@ public class TabletStatusBar extends StatusBar implements
         // act accordingly
         if ((diff & StatusBarManager.DISABLE_CLOCK) != 0) {
             boolean show = (state & StatusBarManager.DISABLE_CLOCK) == 0;
+			mStatusBarView.setShowVolume(show,mContext);
             Slog.i(TAG, "DISABLE_CLOCK: " + (show ? "no" : "yes"));
             showClock(show);
         }
@@ -999,11 +1030,28 @@ public class TabletStatusBar extends StatusBar implements
         boolean disableHome = ((visibility & StatusBarManager.DISABLE_HOME) != 0);
         boolean disableRecent = ((visibility & StatusBarManager.DISABLE_RECENT) != 0);
         boolean disableBack = ((visibility & StatusBarManager.DISABLE_BACK) != 0);
+		boolean disableVolumeUp = (visibility != 0);
+		boolean disableVolumeDown = (visibility != 0);
+		boolean disablePower = (visibility != 0);
 
         mBackButton.setVisibility(disableBack ? View.INVISIBLE : View.VISIBLE);
         mHomeButton.setVisibility(disableHome ? View.INVISIBLE : View.VISIBLE);
         mRecentButton.setVisibility(disableRecent ? View.INVISIBLE : View.VISIBLE);
-
+		
+		/* add by chenjd,chenjd@allwinnertech.com.20120216
+		* if the volumeUpButton and volumeDownButton do exist,operate on them
+		*/
+		if(mContext.getResources().getBoolean(R.bool.hasVolumeButton))
+		{
+			mVolumeUpButton.setVisibility(disableVolumeUp ? View.GONE : View.VISIBLE);
+			mVolumeDownButton.setVisibility(disableVolumeDown ? View.GONE : View.VISIBLE);
+		}
+		if(mContext.getResources().getBoolean(R.bool.hasPowerButton)){
+			mPower.setVisibility(disablePower ? View.GONE : View.VISIBLE);
+		}
+		/* end add..............................................................
+		*/
+		
         mInputMethodSwitchButton.setScreenLocked(
                 (visibility & StatusBarManager.DISABLE_SYSTEM_INFO) != 0);
     }
@@ -1835,7 +1883,7 @@ public class TabletStatusBar extends StatusBar implements
             } catch (NameNotFoundException ex) {
                 Slog.e(TAG, "Failed looking up ApplicationInfo for " + sbn.pkg, ex);
             }
-            if (version > 0 && version < Build.VERSION_CODES.HONEYCOMB) {
+            if (version > 0 && version < Build.VERSION_CODES.GINGERBREAD) {
                 content.setBackgroundResource(R.drawable.notification_row_legacy_bg);
             } else {
                 content.setBackgroundResource(R.drawable.notification_row_bg);

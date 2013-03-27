@@ -229,4 +229,23 @@ interface IWindowManager
      * Device has a software navigation bar (separate from the status bar).
      */
     boolean hasNavigationBar();
+
+    /**
+     * Lock the device immediately.
+     */
+    void lockNow();
+    
+    void resetInputCalibration();
+    void statusbarShow();
+    void statusbarHide();
+    void invokePerformWindow();
+    void keyEnterMouseMode();
+
+	void keyExitMouseMode();
+
+	void keySetMouseMoveCode(int left,int right,int top,int bottom);
+
+	void keySetMouseBtnCode(int leftbtn,int midbtn,int rightbtn);
+
+	void keySetMouseDistance(int distance);
 }

@@ -23,7 +23,7 @@
         android:orientation="vertical"
         >
 
-    <!-- Airplane mode -->
+    <!-- Airplane mode
     <LinearLayout
             android:id="@+id/airplane"
             style="@style/StatusBarPanelSettingsRow"
@@ -47,6 +47,7 @@
                 />
     </LinearLayout>
     <View style="@style/StatusBarPanelSettingsPanelSeparator" />
+    -->
 
     <!-- Network -->
     <LinearLayout
@@ -66,7 +67,7 @@
     </LinearLayout>
     <View style="@style/StatusBarPanelSettingsPanelSeparator" />
 
-    <!-- Rotation lock -->
+    <!-- Rotation lock 
     <LinearLayout
             android:id="@+id/rotate"
             style="@style/StatusBarPanelSettingsRow"
@@ -90,8 +91,9 @@
                 />
     </LinearLayout>
     <View style="@style/StatusBarPanelSettingsPanelSeparator" />
+    -->
 
-    <!-- Brightness -->
+    <!-- Brightness 
     <LinearLayout style="@style/StatusBarPanelSettingsRow" >
         <ImageView
                 android:id="@+id/brightness_icon"
@@ -108,6 +110,7 @@
                 />
     </LinearLayout>
     <View style="@style/StatusBarPanelSettingsPanelSeparator" />
+    -->
 
     <!-- Notifications / Do not disturb -->
     <LinearLayout

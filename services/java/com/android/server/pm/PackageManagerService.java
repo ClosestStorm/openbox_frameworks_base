@@ -137,6 +137,8 @@ import java.util.zip.ZipOutputStream;
 import libcore.io.ErrnoException;
 import libcore.io.Libcore;
 
+import android.content.pm.IResolveListener;
+import android.util.FastImmutableArraySet;
 /**
  * Keep track of all those .apks everywhere.
  * 
@@ -265,6 +267,7 @@ public class PackageManagerService extends IPackageManager.Stub {
     final File mAppInstallDir;
     final File mDalvikCacheDir;
 
+	final ArrayList<ResolveListener> mListeners = new ArrayList<ResolveListener>();
     // Directory containing the private parts (e.g. code and non-resource assets) of forward-locked
     // apps.
     final File mDrmAppPrivateInstallDir;
@@ -804,6 +807,183 @@ public class PackageManagerService extends IPackageManager.Stub {
             }
         }
     }
+
+	private final class ThreadDeathRecipient implements IBinder.DeathRecipient 
+    {
+        private  	IBinder  			mListenerBinder;
+        private  	IResolveListener  	mListener;
+		
+
+        ThreadDeathRecipient(IResolveListener listener) 
+        {
+            mListener 			= listener;
+            mListenerBinder 	= listener.asBinder();
+        }
+
+        public void binderDied() 
+        {
+            synchronized(PackageManagerService.this) 
+            {
+                PackageManagerService.this.unregisterResolveListener(mListener);
+            }
+        }
+    }
+    
+    public class ResolveListener
+	{
+        private  	IBinder  				mListenerBinder;
+        private  	IResolveListener  		mListener;
+        private		ThreadDeathRecipient 	deathRecipient;
+		private     IntentFilter			mFilter;
+        
+        public ResolveListener(IResolveListener listener)
+        {
+        	deathRecipient = new ThreadDeathRecipient(listener);
+        	
+        	mListenerBinder 		= listener.asBinder();
+        	mListener 				= listener;
+        	try 
+        	{
+        		mFilter				    = listener.getResolveIntentFilter();
+            	mListener.asBinder().linkToDeath(deathRecipient, 0);
+        	} 
+        	catch (RemoteException e) 
+        	{
+
+        	}
+        }
+        
+        public IResolveListener getResolveListener()
+        {
+        	return mListener;
+        }
+
+		private FastImmutableArraySet<String> getFastIntentCategories(Intent intent) 
+		{
+	        final Set<String> categories = intent.getCategories();
+	        if (categories == null) 
+			{
+	            return null;
+	        }
+			
+	        return new FastImmutableArraySet<String>(categories.toArray(new String[categories.size()]));
+    	}
+
+		public int matchIntent(Intent intent,String resolvedType)
+		{
+		    int  match;
+			
+			final String action = intent.getAction();
+        	final Uri data = intent.getData();
+        	final String packageName = intent.getPackage();
+			String scheme = intent.getScheme();
+        	final boolean excludingStopped = intent.isExcludingStopped();
+			FastImmutableArraySet<String> categories = getFastIntentCategories(intent);
+
+			match = mFilter.match(action, resolvedType, scheme, data, categories, "ResolveListener");
+            if (match < 0) 
+            {
+                if (false) 
+				{
+                    String reason;
+                    switch (match) 
+					{
+                        case IntentFilter.NO_MATCH_ACTION: reason = "action"; break;
+                        case IntentFilter.NO_MATCH_CATEGORY: reason = "category"; break;
+                        case IntentFilter.NO_MATCH_DATA: reason = "data"; break;
+                        case IntentFilter.NO_MATCH_TYPE: reason = "type"; break;
+                        default: reason = "unknown reason"; break;
+                    }
+                    Slog.v(TAG, "  Filter did not match: " + reason);
+                }
+            }
+
+			return  match;
+		}
+    }
+    
+    public int registerResolveListener(IResolveListener listener)
+    {
+    	int		 i;
+    	boolean  find = false;
+    	
+    	for(i = 0;i < mListeners.size();i++)
+    	{
+    		if(mListeners.get(i).getResolveListener().asBinder().equals(listener.asBinder()))
+    		{
+    			find = true;
+    			
+    			break;
+    		}
+    	}
+    	
+    	if(find == false)
+    	{
+	    	mListeners.add(new ResolveListener(listener));
+    	}
+
+    	return 0;
+    }
+    
+    public int unregisterResolveListener(IResolveListener listener)
+    {
+    	int		 i;
+    	boolean  find = false;
+    	
+    	for(i = 0;i < mListeners.size();i++)
+    	{
+    		if(mListeners.get(i).getResolveListener().asBinder().equals(listener.asBinder()))
+    		{
+    			find = true;
+    			
+    			break;
+    		}
+    	}
+    	
+    	if(find == true)
+    	{
+	    	mListeners.remove(i);
+	        	
+	        return 0;
+    	}
+    	
+    	return -1;
+    }
+
+	public boolean InterceptResolve(Intent intent,String resolvedType)
+	{
+		int		 				i;   
+		int						match;
+		boolean					ret = false; 
+		boolean					ret_result = false; 
+    	
+    	for(i = 0;i < mListeners.size();i++)
+    	{
+    		Slog.d(TAG, "InterceptResolve  intent: " + intent);
+    		IResolveListener resolvelistener = mListeners.get(i).getResolveListener();
+    			
+			try 
+	        {
+	        	match = mListeners.get(i).matchIntent(intent,resolvedType);
+				Slog.d(TAG, "InterceptResolve  match: " + match);
+				if(match >= 0)
+				{
+		            ret = resolvelistener.onInterceptResolve(intent,resolvedType);
+					Slog.d(TAG, "InterceptResolve  ret: " + ret);
+		            if(ret == true)
+		            {
+		            	ret_result = true;
+		           	}
+	        	}
+	        } 
+	        catch (RemoteException ex) 
+	        {
+	            break;
+	        }
+    	}
+    	
+    	return ret_result;
+	}
 
     void scheduleWriteSettingsLocked() {
         if (!mHandler.hasMessages(WRITE_SETTINGS)) {
@@ -2119,8 +2299,13 @@ public class PackageManagerService extends IPackageManager.Stub {
 
     public ResolveInfo resolveIntent(Intent intent, String resolvedType,
             int flags) {
-        List<ResolveInfo> query = queryIntentActivities(intent, resolvedType, flags);
-        return chooseBestActivity(intent, resolvedType, flags, query);
+		if(InterceptResolve(intent,resolvedType) == false)
+		{
+			List<ResolveInfo> query = queryIntentActivities(intent, resolvedType, flags);
+        	return chooseBestActivity(intent, resolvedType, flags, query);
+		}
+
+		return chooseBestActivity(intent, resolvedType, flags, null);  
     }
 
     private ResolveInfo chooseBestActivity(Intent intent, String resolvedType,
@@ -2162,6 +2347,9 @@ public class PackageManagerService extends IPackageManager.Stub {
             int flags, List<ResolveInfo> query, int priority) {
         // writer
         synchronized (mPackages) {
+            if (intent.getSelector() != null) {
+                intent = intent.getSelector(); 
+            }
             if (DEBUG_PREFERRED) intent.addFlags(Intent.FLAG_DEBUG_LOG_RESOLUTION);
             List<PreferredActivity> prefs =
                     mSettings.mPreferredActivities.queryIntent(intent, resolvedType,
@@ -2242,7 +2430,13 @@ public class PackageManagerService extends IPackageManager.Stub {
 
     public List<ResolveInfo> queryIntentActivities(Intent intent,
             String resolvedType, int flags) {
-        final ComponentName comp = intent.getComponent();
+        ComponentName comp = intent.getComponent();
+        if (comp == null) {
+            if (intent.getSelector() != null) {
+                intent = intent.getSelector(); 
+                comp = intent.getComponent();
+            }
+        }
         if (comp != null) {
             final List<ResolveInfo> list = new ArrayList<ResolveInfo>(1);
             final ActivityInfo ai = getActivityInfo(comp, flags);
@@ -2440,6 +2634,12 @@ public class PackageManagerService extends IPackageManager.Stub {
 
     public List<ResolveInfo> queryIntentReceivers(Intent intent, String resolvedType, int flags) {
         ComponentName comp = intent.getComponent();
+        if (comp == null) {
+            if (intent.getSelector() != null) {
+                intent = intent.getSelector(); 
+                comp = intent.getComponent();
+            }
+        }
         if (comp != null) {
             List<ResolveInfo> list = new ArrayList<ResolveInfo>(1);
             ActivityInfo ai = getReceiverInfo(comp, flags);
@@ -2478,7 +2678,13 @@ public class PackageManagerService extends IPackageManager.Stub {
     }
 
     public List<ResolveInfo> queryIntentServices(Intent intent, String resolvedType, int flags) {
-        final ComponentName comp = intent.getComponent();
+        ComponentName comp = intent.getComponent();
+        if (comp == null) {
+            if (intent.getSelector() != null) {
+                intent = intent.getSelector(); 
+                comp = intent.getComponent();
+            }
+        }
         if (comp != null) {
             final List<ResolveInfo> list = new ArrayList<ResolveInfo>(1);
             final ServiceInfo si = getServiceInfo(comp, flags);

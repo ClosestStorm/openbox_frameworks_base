@@ -28,10 +28,11 @@
 #include <EGL/eglext.h>
 
 #include <pixelflinger/pixelflinger.h>
-
+#include "DisplayDispatcher.h"
 #include "GLExtensions.h"
 
 #include "DisplayHardware/DisplayHardwareBase.h"
+#include <ui/DisplayCommand.h>
 
 namespace android {
 
@@ -81,7 +82,7 @@ public:
 
     // Hardware Composer
     HWComposer& getHwComposer() const;
-    
+    sp<DisplayDispatcher>  mDisplayDispatcher;
     status_t compositionComplete() const;
     
     Rect getBounds() const {
@@ -91,6 +92,9 @@ public:
 
     // only for debugging
     int getCurrentBufferIndex() const;
+
+    int setDispProp(int cmd,int param0,int param1,int param2) const;
+    int getDispProp(int cmd,int param0,int param1) const;
 
 private:
     void init(uint32_t displayIndex) __attribute__((noinline));

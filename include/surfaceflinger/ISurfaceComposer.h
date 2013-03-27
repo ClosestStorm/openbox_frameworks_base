@@ -29,6 +29,7 @@
 
 #include <surfaceflinger/ISurfaceComposerClient.h>
 #include <surfaceflinger/IGraphicBufferAlloc.h>
+#include <surfaceflinger/ISurfaceClient.h>
 
 namespace android {
 // ----------------------------------------------------------------------------
@@ -126,7 +127,9 @@ public:
 
     virtual status_t turnElectronBeamOff(int32_t mode) = 0;
     virtual status_t turnElectronBeamOn(int32_t mode) = 0;
-
+    virtual int      setDisplayProp(int cmd,int param0,int param1,int param2) = 0;
+    virtual int      getDisplayProp(int cmd,int param0,int param1) = 0;
+    virtual void     registerClient(const sp<ISurfaceClient>& client) = 0;
     /* verify that an ISurfaceTexture was created by SurfaceFlinger.
      */
     virtual bool authenticateSurfaceTexture(
@@ -151,6 +154,9 @@ public:
         TURN_ELECTRON_BEAM_OFF,
         TURN_ELECTRON_BEAM_ON,
         AUTHENTICATE_SURFACE,
+        SET_DISPLAYPROP,
+        GET_DISPLAYPROP,
+        REGISTER_CLIENT,
     };
 
     virtual status_t    onTransact( uint32_t code,

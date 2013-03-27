@@ -88,6 +88,8 @@ import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.LocationController;
 import com.android.systemui.statusbar.policy.NetworkController;
 import com.android.systemui.statusbar.policy.NotificationRowLayout;
+import com.android.systemui.statusbar.policy.DisplayController;
+import com.android.systemui.statusbar.policy.SoundController;
 
 public class PhoneStatusBar extends StatusBar {
     static final String TAG = "PhoneStatusBar";
@@ -136,6 +138,8 @@ public class PhoneStatusBar extends StatusBar {
     BatteryController mBatteryController;
     LocationController mLocationController;
     NetworkController mNetworkController;
+	DisplayController mDisplayController;
+	SoundController mSoundController;
     
     int mNaturalBarHeight = -1;
     int mIconSize = -1;
@@ -168,7 +172,7 @@ public class PhoneStatusBar extends StatusBar {
 
     // drag bar
     CloseDragHandle mCloseView;
-    
+
     // all notifications
     NotificationData mNotificationData = new NotificationData();
     NotificationRowLayout mPile;
@@ -298,7 +302,7 @@ public class PhoneStatusBar extends StatusBar {
         try {
             boolean showNav = mWindowManager.hasNavigationBar();
             if (showNav) {
-                mNavigationBarView = 
+                mNavigationBarView =
                     (NavigationBarView) View.inflate(context, R.layout.navigation_bar, null);
 
                 mNavigationBarView.setDisabledFlags(mDisabled);
@@ -350,13 +354,15 @@ public class PhoneStatusBar extends StatusBar {
         // Other icons
         mLocationController = new LocationController(mContext); // will post a notification
         mBatteryController = new BatteryController(mContext);
-        mBatteryController.addIconView((ImageView)sb.findViewById(R.id.battery));
+		mDisplayController = new DisplayController(mContext);
+        mSoundController = new SoundController(mContext);
+		mBatteryController.addIconView((ImageView)sb.findViewById(R.id.battery));
         mNetworkController = new NetworkController(mContext);
-        final SignalClusterView signalCluster = 
+        final SignalClusterView signalCluster =
                 (SignalClusterView)sb.findViewById(R.id.signal_cluster);
         mNetworkController.addSignalCluster(signalCluster);
         signalCluster.setNetworkController(mNetworkController);
-//        final ImageView wimaxRSSI = 
+//        final ImageView wimaxRSSI =
 //                (ImageView)sb.findViewById(R.id.wimax_signal);
 //        if (wimaxRSSI != null) {
 //            mNetworkController.addWimaxIconView(wimaxRSSI);
@@ -973,7 +979,7 @@ public class PhoneStatusBar extends StatusBar {
             } catch (NameNotFoundException ex) {
                 Slog.e(TAG, "Failed looking up ApplicationInfo for " + sbn.pkg, ex);
             }
-            if (version > 0 && version < Build.VERSION_CODES.HONEYCOMB) {
+            if (version > 0 && version < Build.VERSION_CODES.GINGERBREAD) {
                 content.setBackgroundResource(R.drawable.notification_row_legacy_bg);
             } else {
                 content.setBackgroundResource(R.drawable.notification_row_bg);
@@ -1085,8 +1091,8 @@ public class PhoneStatusBar extends StatusBar {
             }
         }
 
-        if ((diff & (StatusBarManager.DISABLE_HOME 
-                        | StatusBarManager.DISABLE_RECENT 
+        if ((diff & (StatusBarManager.DISABLE_HOME
+                        | StatusBarManager.DISABLE_RECENT
                         | StatusBarManager.DISABLE_BACK)) != 0) {
             // the nav bar will take care of these
             if (mNavigationBarView != null) mNavigationBarView.setDisabledFlags(state);
@@ -1204,7 +1210,7 @@ public class PhoneStatusBar extends StatusBar {
     public void animateCollapse(boolean excludeRecents) {
         animateCollapse(excludeRecents, 1.0f);
     }
-    
+
     public void animateCollapse(boolean excludeRecents, float velocityMultiplier) {
         if (SPEW) {
             Slog.d(TAG, "animateCollapse(): mExpanded=" + mExpanded
@@ -1516,8 +1522,8 @@ public class PhoneStatusBar extends StatusBar {
                 }
 
                 if (CHATTY) {
-                    Slog.d(TAG, String.format("gesture: vraw=(%f,%f) vnorm=(%f,%f) vlinear=%f", 
-                        mVelocityTracker.getXVelocity(), 
+                    Slog.d(TAG, String.format("gesture: vraw=(%f,%f) vnorm=(%f,%f) vlinear=%f",
+                        mVelocityTracker.getXVelocity(),
                         mVelocityTracker.getYVelocity(),
                         xVel, yVel,
                         vel));
@@ -1735,9 +1741,9 @@ public class PhoneStatusBar extends StatusBar {
         return anim;
     }
 
-    public String viewInfo(View v) {
-        return "(" + v.getLeft() + "," + v.getTop() + ")(" + v.getRight() + "," + v.getBottom()
-                + " " + v.getWidth() + "x" + v.getHeight() + ")";
+    public static String viewInfo(View v) {
+        return "[(" + v.getLeft() + "," + v.getTop() + ")(" + v.getRight() + "," + v.getBottom()
+                + ") " + v.getWidth() + "x" + v.getHeight() + "]";
     }
 
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
@@ -1768,6 +1774,13 @@ public class PhoneStatusBar extends StatusBar {
                     + " scroll " + mScrollView.getScrollX() + "," + mScrollView.getScrollY());
         }
 
+        pw.print("  mNavigationBarView=");
+        if (mNavigationBarView == null) {
+            pw.println("null");
+        } else {
+            mNavigationBarView.dump(fd, pw, args);
+        }
+
         if (DUMPTRUCK) {
             synchronized (mNotificationData) {
                 int N = mNotificationData.size();
@@ -1788,7 +1801,7 @@ public class PhoneStatusBar extends StatusBar {
                 StatusBarIconView ic = (StatusBarIconView) mStatusIcons.getChildAt(i);
                 pw.println("    [" + i + "] icon=" + ic);
             }
-            
+
             if (false) {
                 pw.println("see the logcat for a dump of the views we have created.");
                 // must happen on ui thread
@@ -1963,10 +1976,10 @@ public class PhoneStatusBar extends StatusBar {
                         - (mTrackingParams.height-closePos) - contentsBottom;
 
                 if (SPEW) {
-                    Slog.d(PhoneStatusBar.TAG, 
+                    Slog.d(PhoneStatusBar.TAG,
                             "pos=" + pos +
                             " trackingHeight=" + mTrackingView.getHeight() +
-                            " (trackingParams.height - closePos)=" + 
+                            " (trackingParams.height - closePos)=" +
                                 (mTrackingParams.height - closePos) +
                             " contentsBottom=" + contentsBottom);
                 }
@@ -2041,7 +2054,7 @@ public class PhoneStatusBar extends StatusBar {
                 mExpandedDialog.getWindow().setAttributes(mExpandedParams);
             }
             if (DEBUG) {
-                Slog.d(TAG, "updateExpandedSize: height=" + mExpandedParams.height + " " + 
+                Slog.d(TAG, "updateExpandedSize: height=" + mExpandedParams.height + " " +
                     (mExpandedVisible ? "VISIBLE":"INVISIBLE"));
             }
         }
@@ -2181,6 +2194,11 @@ public class PhoneStatusBar extends StatusBar {
 
     private View.OnClickListener mSettingsButtonListener = new View.OnClickListener() {
         public void onClick(View v) {
+            try {
+                // Dismiss the lock screen when Settings starts.
+                ActivityManagerNative.getDefault().dismissKeyguardOnNextActivity();
+            } catch (RemoteException e) {
+            }
             v.getContext().startActivity(new Intent(Settings.ACTION_SETTINGS)
                     .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             animateCollapse();
@@ -2230,7 +2248,7 @@ public class PhoneStatusBar extends StatusBar {
 
         loadDimens();
     }
-    
+
     protected void loadDimens() {
         final Resources res = mContext.getResources();
 

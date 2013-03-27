@@ -64,5 +64,9 @@
          android:targetPackage="com.android.mediaframeworktest"
          android:label="Media Power tests InstrumentationRunner">
      </instrumentation>
+     <instrumentation android:name="android.test.InstrumentationTestRunner"
+         android:targetPackage="com.android.mediaframeworktest"
+         android:label="Media tests InstrumentationRunner">
+     </instrumentation>
 
 </manifest>

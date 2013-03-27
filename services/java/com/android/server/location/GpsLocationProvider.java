@@ -55,6 +55,7 @@ import android.telephony.gsm.GsmCellLocation;
 import android.util.Log;
 import android.util.NtpTrustedTime;
 import android.util.SparseIntArray;
+import android.os.DynamicPManager;
 
 import com.android.internal.app.IBatteryStats;
 import com.android.internal.location.GpsNetInitiatedHandler;
@@ -283,6 +284,8 @@ public class GpsLocationProvider implements LocationProviderInterface {
     private final IBatteryStats mBatteryStats;
     private final SparseIntArray mClientUids = new SparseIntArray();
 
+	//use to control the cpu clk 
+	private DynamicPManager mDPM;
     // how often to request NTP time, in milliseconds
     // current setting 24 hours
     private static final long NTP_INTERVAL = 24*60*60*1000;
@@ -985,16 +988,18 @@ public class GpsLocationProvider implements LocationProviderInterface {
                     mPositionMode = GPS_POSITION_MODE_MS_BASED;
                 }
             }
-
+			enableDPMLock(true);
             int interval = (hasCapability(GPS_CAPABILITY_SCHEDULING) ? mFixInterval : 1000);
             if (!native_set_position_mode(mPositionMode, GPS_POSITION_RECURRENCE_PERIODIC,
                     interval, 0, 0)) {
                 mStarted = false;
+                enableDPMLock(false);
                 Log.e(TAG, "set_position_mode failed in startNavigating()");
                 return;
             }
             if (!native_start()) {
                 mStarted = false;
+                enableDPMLock(false);
                 Log.e(TAG, "native_start failed in startNavigating()");
                 return;
             }
@@ -1019,6 +1024,7 @@ public class GpsLocationProvider implements LocationProviderInterface {
             mStarted = false;
             mSingleShot = false;
             native_stop();
+            enableDPMLock(false);
             mTTFF = 0;
             mLastFixTime = 0;
             mLocationFlags = LOCATION_INVALID;
@@ -1521,7 +1527,22 @@ public class GpsLocationProvider implements LocationProviderInterface {
             Log.e(TAG,"CDMA not supported.");
         }
     }
-
+    
+    /* In usb device connected to pc host, we should also keep cpu run in highest freq, so keep usb transfer in highn 
+     * speed 
+     */
+    private void enableDPMLock(boolean enable){
+        if(enable){
+            if(mDPM==null)
+                mDPM = new DynamicPManager();  
+            mDPM.acquireCpuFreqLock(DynamicPManager.CPU_MODE_PERFORMENCE);                
+        }else{
+            if(mDPM!=null){
+                mDPM.releaseCpuFreqLock();
+                mDPM = null;
+            }
+        }     
+    }
     private void sendMessage(int message, int arg, Object obj) {
         // hold a wake lock while messages are pending
         synchronized (mWakeLock) {

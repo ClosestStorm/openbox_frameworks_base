@@ -30,6 +30,20 @@
 
 #include "com_android_server_PowerManagerService.h"
 
+#include <fcntl.h>
+#include <sys/ioctl.h>
+
+#include <hardware/display.h>
+#include <drv_display_sun4i.h>
+#include <utils/Log.h>
+
+//#define DISP_CMD_DRC_ON  0x24
+//#define DISP_CMD_DRC_OFF  0x25
+//#define DISP_CMD_DRC_SET_WINDOW 0x26
+
+#define WISE_BAKCLIGHT_MASK 0x1
+#define SET_WINDOW_MASK 0x10
+
 namespace android {
 
 // ----------------------------------------------------------------------------
@@ -128,6 +142,50 @@ static void android_server_PowerManagerService_nativeStartSurfaceFlingerAnimatio
     s->turnElectronBeamOff(mode);
 }
 
+static void android_server_PowerManagerService_nativeSetWiseBacklightMode(JNIEnv* env,
+        jobject obj, jint mode) {
+        
+  int mFD = open("/dev/disp", O_RDWR, 0);
+  if(mFD < 0)
+  {
+  		return ;
+  }
+  else
+  {
+	  unsigned long args[4];
+	  
+	  args[0] = 0;
+	  LOGD("WISE BACKLIGHT MODE =%d",mode);
+	  if(mode & WISE_BAKCLIGHT_MASK)
+	  {
+	  	  __disp_rect_t win;
+		
+		  win.x = 0;
+		  win.y = 0;
+	  	  win.width  = ioctl(mFD, DISP_CMD_SCN_GET_WIDTH,args);
+		  win.height = ioctl(mFD, DISP_CMD_SCN_GET_HEIGHT,args);
+	  	  if(mode & SET_WINDOW_MASK)
+	  	  {
+	  	  	LOGD("set window for wise backlight mode =%d");
+			 win.width =  win.width>>1;
+
+	  	  }
+		  args[1] = (unsigned long)&win;
+		  ioctl(mFD,DISP_CMD_DRC_SET_WINDOW,args);
+		  ioctl(mFD,DISP_CMD_DRC_ON,args);
+	  
+	  }
+	  else
+	  {   
+		  ioctl(mFD,DISP_CMD_DRC_OFF,args);
+	  }
+
+	  close(mFD);
+	  return ;
+
+  }
+}
+
 // ----------------------------------------------------------------------------
 
 static JNINativeMethod gPowerManagerServiceMethods[] = {
@@ -138,6 +196,9 @@ static JNINativeMethod gPowerManagerServiceMethods[] = {
             (void*) android_server_PowerManagerService_nativeSetPowerState },
     { "nativeStartSurfaceFlingerAnimation", "(I)V",
             (void*) android_server_PowerManagerService_nativeStartSurfaceFlingerAnimation },
+	{ "nativeSetWiseBacklightMode", "(I)V",
+				(void*) android_server_PowerManagerService_nativeSetWiseBacklightMode },
+
 };
 
 #define FIND_CLASS(var, className) \

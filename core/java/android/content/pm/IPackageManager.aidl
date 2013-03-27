@@ -41,6 +41,7 @@ import android.content.pm.UserInfo;
 import android.content.pm.VerifierDeviceIdentity;
 import android.net.Uri;
 import android.content.IntentSender;
+import android.content.pm.IResolveListener;
 
 /**
  *  See {@link PackageManager} for documentation on most of the APIs
@@ -364,4 +365,6 @@ interface IPackageManager {
     VerifierDeviceIdentity getVerifierDeviceIdentity();
 
     boolean isFirstBoot();
+    int registerResolveListener(in IResolveListener listener);
+	int unregisterResolveListener(in IResolveListener listener);
 }

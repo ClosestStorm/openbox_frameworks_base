@@ -119,6 +119,7 @@ extern int register_android_view_GLES20Canvas(JNIEnv* env);
 extern int register_android_view_HardwareRenderer(JNIEnv* env);
 extern int register_android_view_Surface(JNIEnv* env);
 extern int register_android_view_TextureView(JNIEnv* env);
+extern int register_android_view_HWCursor(JNIEnv* env);
 extern int register_android_database_CursorWindow(JNIEnv* env);
 extern int register_android_database_SQLiteCompiledSql(JNIEnv* env);
 extern int register_android_database_SQLiteDatabase(JNIEnv* env);
@@ -135,6 +136,7 @@ extern int register_android_os_Debug(JNIEnv* env);
 extern int register_android_os_MessageQueue(JNIEnv* env);
 extern int register_android_os_ParcelFileDescriptor(JNIEnv *env);
 extern int register_android_os_Power(JNIEnv *env);
+extern int register_android_os_Gpio(JNIEnv *env);
 extern int register_android_os_StatFs(JNIEnv *env);
 extern int register_android_os_SystemProperties(JNIEnv *env);
 extern int register_android_os_SystemClock(JNIEnv* env);
@@ -1104,6 +1106,7 @@ static const RegJNIRec gRegJNI[] = {
     REG_JNI(register_android_view_GLES20Canvas),
     REG_JNI(register_android_view_HardwareRenderer),
     REG_JNI(register_android_view_Surface),
+    REG_JNI(register_android_view_HWCursor),
     REG_JNI(register_android_view_TextureView),
     REG_JNI(register_com_google_android_gles_jni_EGLImpl),
     REG_JNI(register_com_google_android_gles_jni_GLImpl),
@@ -1153,6 +1156,7 @@ static const RegJNIRec gRegJNI[] = {
     REG_JNI(register_android_os_MessageQueue),
     REG_JNI(register_android_os_ParcelFileDescriptor),
     REG_JNI(register_android_os_Power),
+    REG_JNI(register_android_os_Gpio),
     REG_JNI(register_android_os_StatFs),
     REG_JNI(register_android_os_UEventObserver),
     REG_JNI(register_android_net_LocalSocketImpl),

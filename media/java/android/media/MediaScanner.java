@@ -47,6 +47,7 @@ import android.sax.RootElement;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Xml;
+import android.os.Environment;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -1068,6 +1069,7 @@ public class MediaScanner
                 if (false)
                     Log.v(TAG, "fileToDelete is " + fileToDelete);
                 try {
+                    Log.v(TAG, "fileToDelete is " + fileToDelete);
                     (new File(fileToDelete)).delete();
                 } catch (SecurityException ex) {
                 }
@@ -1125,6 +1127,7 @@ public class MediaScanner
                 int fileType = (mediaFileType == null ? 0 : mediaFileType.fileType);
 
                 if (!MediaFile.isPlayListFileType(fileType)) {
+					Log.d(TAG, "to delte item = " + ContentUris.withAppendedId(mFilesUri, entry.mRowId));
                     mMediaProvider.delete(ContentUris.withAppendedId(mFilesUri, entry.mRowId),
                             null, null);
                     iterator.remove();

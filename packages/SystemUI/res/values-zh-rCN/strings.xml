@@ -140,5 +140,29 @@
     <string name="gps_notification_searching_text" msgid="8574247005642736060">"正在搜索 GPS"</string>
     <string name="gps_notification_found_text" msgid="4619274244146446464">"已通过 GPS 确定位置"</string>
     <string name="accessibility_clear_all" msgid="5235938559247164925">"清除所有通知。"</string>
-    <string name="dreams_dock_launcher" msgid="3541196417659166245">"激活屏幕保护程序"</string>
+
+	<!-- ethernet string  -->
+	<string name="ethernet_link">以太网连接到网络</string>
+	<string name="ethernet_description">以太网络</string>
+	
+	<string name="usb_mounted_title">"USB设备接入"</string>
+	<string name="usb_mounted_message">"USB设备接入"</string>
+	<string name="sd_mounted_title">"SD卡设备接入"</string>
+	<string name="sd_mounted_message">"SD卡设备接入"</string>
+	<string name="usb_unmountable_notification_title">"USB 存储设备已损坏"</string>
+	<string name="usb_unmountable_notification_message">"USB 存储设备已损坏，您可能需要对其重新格式化。"</string>
+	<string name="usb_badremoval_notification_title">"USB 存储设备已意外移除"</string>
+	<string name="usb_badremoval_notification_message">"请先卸载 USB 存储设备，再将其移除，以防数据丢失。"</string>
+	<string name="usb_nomedia_notification_title">"已移除 USB 设备"</string>
+	<string name="usb_nomedia_notification_message">"USB 设备已移除。"</string>
+	
+  <string name="notifications_off_title" msgid="1860117696034775851">"通知功能已停用"</string>
+  <string name="notifications_off_text" msgid="1439152806320786912">"点按此处可重新启用通知功能。"</string>
+	<!-- notification for audio plug in/out -->
+	<string name="audio_out_plug_in_title">"USB音频输出设备接入"</string>
+	<string name="audio_plug_in_message">"已切换至该音频通道"</string>
+	<string name="audio_plug_out_message">"切换至原始的默认通道"</string>
+	<string name="audio_out_plug_out_title">"USB音频输出设备拔出"</string>
+	<string name="audio_in_plug_in_title">"USB音频输入设备接入"</string>
+	<string name="audio_in_plug_out_title">"USB音频输入设备拔出"</string>
 </resources>

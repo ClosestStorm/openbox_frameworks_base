@@ -20,6 +20,7 @@ import com.android.internal.content.PackageMonitor;
 import com.android.internal.os.storage.ExternalStorageFormatter;
 import com.android.internal.util.FastXmlSerializer;
 import com.android.internal.util.JournaledFile;
+import com.android.internal.os.AtomicFile;
 import com.android.internal.util.XmlUtils;
 import com.android.internal.widget.LockPatternUtils;
 
@@ -60,6 +61,7 @@ import android.util.PrintWriterPrinter;
 import android.util.Printer;
 import android.util.Slog;
 import android.util.Xml;
+import android.view.IWindowManager;
 import android.view.WindowManagerPolicy;
 
 import java.io.File;
@@ -90,12 +92,15 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
             = "com.android.server.ACTION_EXPIRED_PASSWORD_NOTIFICATION";
 
     private static final long MS_PER_DAY = 86400 * 1000;
+	
+	private static final String mfilename = "/data/system/device_policies.xml"; 
 
     final Context mContext;
     final MyPackageMonitor mMonitor;
     final PowerManager.WakeLock mWakeLock;
 
     IPowerManager mIPowerManager;
+    IWindowManager mIWindowManager;
 
     int mActivePasswordQuality = DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED;
     int mActivePasswordLength = 0;
@@ -506,6 +511,14 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
         return mIPowerManager;
     }
 
+    private IWindowManager getWindowManager() {
+        if (mIWindowManager == null) {
+            IBinder b = ServiceManager.getService(Context.WINDOW_SERVICE);
+            mIWindowManager = IWindowManager.Stub.asInterface(b);
+        }
+        return mIWindowManager;
+    }
+
     ActiveAdmin getActiveAdminUncheckedLocked(ComponentName who) {
         ActiveAdmin admin = mAdminMap.get(who);
         if (admin != null
@@ -622,16 +635,16 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
         }
     }
 
-    private static JournaledFile makeJournaledFile() {
+    private static AtomicFile makeAtomicFile() {
         final String base = "/data/system/device_policies.xml";
-        return new JournaledFile(new File(base), new File(base + ".tmp"));
+        return new AtomicFile(new File(base));
     }
 
     private void saveSettingsLocked() {
-        JournaledFile journal = makeJournaledFile();
+        AtomicFile atomic = makeAtomicFile();
         FileOutputStream stream = null;
         try {
-            stream = new FileOutputStream(journal.chooseForWrite(), false);
+            stream = atomic.startWrite();
             XmlSerializer out = new FastXmlSerializer();
             out.setOutput(stream, "utf-8");
             out.startDocument(null, true);
@@ -682,7 +695,7 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
 
             out.endDocument();
             stream.close();
-            journal.commit();
+            atomic.finishWrite(stream);
             sendChangedNotification();
         } catch (IOException e) {
             try {
@@ -692,7 +705,7 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
             } catch (IOException ex) {
                 // Ignore
             }
-            journal.rollback();
+            atomic.failWrite(stream);
         }
     }
 
@@ -703,11 +716,10 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
     }
 
     private void loadSettingsLocked() {
-        JournaledFile journal = makeJournaledFile();
+        AtomicFile atomic = makeAtomicFile();
         FileInputStream stream = null;
-        File file = journal.chooseForRead();
         try {
-            stream = new FileInputStream(file);
+            stream = atomic.openRead();
             XmlPullParser parser = Xml.newPullParser();
             parser.setInput(stream, null);
 
@@ -774,17 +786,17 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
                 }
             }
         } catch (NullPointerException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (NumberFormatException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (XmlPullParserException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (FileNotFoundException e) {
             // Don't be noisy, this is normal if we haven't defined any policies.
         } catch (IOException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         } catch (IndexOutOfBoundsException e) {
-            Slog.w(TAG, "failed parsing " + file + " " + e);
+            Slog.w(TAG, "failed parsing " + mfilename + " " + e);
         }
         try {
             if (stream != null) {
@@ -831,6 +843,7 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
     static void validateQualityConstant(int quality) {
         switch (quality) {
             case DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED:
+            case DevicePolicyManager.PASSWORD_QUALITY_BIOMETRIC_WEAK:
             case DevicePolicyManager.PASSWORD_QUALITY_SOMETHING:
             case DevicePolicyManager.PASSWORD_QUALITY_NUMERIC:
             case DevicePolicyManager.PASSWORD_QUALITY_ALPHABETIC:
@@ -1648,8 +1661,11 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
                     DeviceAdminInfo.USES_POLICY_FORCE_LOCK);
             long ident = Binder.clearCallingIdentity();
             try {
+                // Power off the display
                 mIPowerManager.goToSleepWithReason(SystemClock.uptimeMillis(),
                         WindowManagerPolicy.OFF_BECAUSE_OF_ADMIN);
+                // Ensure the device is locked
+                getWindowManager().lockNow();
             } catch (RemoteException e) {
             } finally {
                 Binder.restoreCallingIdentity(ident);

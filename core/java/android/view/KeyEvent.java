@@ -579,8 +579,52 @@ public class KeyEvent extends InputEvent implements Parcelable {
     /** Key code constant: 3D Mode key.
      * Toggles the display between 2D and 3D mode. */
     public static final int KEYCODE_3D_MODE         = 206;
+    /** Key code constant: Contacts special function key.
+     * Used to launch an address book application. */
+    public static final int KEYCODE_CONTACTS        = 207;
+    /** Key code constant: Calendar special function key.
+     * Used to launch a calendar application. */
+    public static final int KEYCODE_CALENDAR        = 208;
+    /** Key code constant: Music special function key.
+     * Used to launch a music player application. */
+    public static final int KEYCODE_MUSIC           = 209;
+    /** Key code constant: Calculator special function key.
+     * Used to launch a calculator application. */
+    public static final int KEYCODE_CALCULATOR      = 210;
 
-    private static final int LAST_KEYCODE           = KEYCODE_BUTTON_16;
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-10-27 */
+    /* add some new keys for TVD */
+	public static final int KEYCODE_TV_SYSTEM       = 10000;
+	/** Key code constant: a shortcut key for a time dialog */
+	public static final int KEYCODE_GOTO            = 10001;
+	/** Key code constant: a shortcut key for switching subtitles */
+	public static final int KEYCODE_SUBTITLE        = 10002;
+	/** Key code constant: a shortcut key for switching tracks */
+	public static final int KEYCODE_AUDIO           = 10003;
+	/** Key code constant: a shortcut key for zooming video */
+	public static final int KEYCODE_ZOOM            = 10004;
+	/** Key code constant: a shortcut key for help */
+	public static final int KEYCODE_HELP            = 10005;
+	/** Key code constant: a shortcut key for favourite */
+	public static final int KEYCODE_FAVOURITE       = 10006;
+	/** Key code constant: a shortcut key for loop */
+	public static final int KEYCODE_LOOP            = 10007;
+	/** Key code constant: a shortcut key for showing or hiding statusbar's expanded view */
+	public static final int KEYCODE_EXPAND          = 10008;
+	/** Key code constant: a shortcut key for mouse */
+	public static final int KEYCODE_MOUSE           = 10009;
+	/** Key code constant: a shortcut key for movie */
+	public static final int KEYCODE_MOVIE           = 10010;
+	/** Key code constant: a shortcut key for app list */
+	public static final int KEYCODE_APPS            = 10011;
+	/** Key code constant: a shortcut key for the browser app */
+	public static final int KEYCODE_BROWSER         = 10012;
+	/** Key code constant: a shortcut key for the screenshot */
+	public static final int KEYCODE_SCREENSHOT      = 10013;
+
+    private static final int LAST_KEYCODE           = KEYCODE_SCREENSHOT;
+    /* add by Gary. end   -----------------------------------}} */
 
     // NOTE: If you add a new keycode here you must also add it to:
     //  isSystem()
@@ -589,6 +633,8 @@ public class KeyEvent extends InputEvent implements Parcelable {
     //  external/webkit/WebKit/android/plugins/ANPKeyCodes.h
     //  frameworks/base/core/res/res/values/attrs.xml
     //  emulator?
+    //  LAST_KEYCODE
+    //  KEYCODE_SYMBOLIC_NAMES
     //
     //  Also Android currently does not reserve code ranges for vendor-
     //  specific key codes.  If you have new key codes to have, you
@@ -807,6 +853,27 @@ public class KeyEvent extends InputEvent implements Parcelable {
         names.append(KEYCODE_LANGUAGE_SWITCH, "KEYCODE_LANGUAGE_SWITCH");
         names.append(KEYCODE_MANNER_MODE, "KEYCODE_MANNER_MODE");
         names.append(KEYCODE_3D_MODE, "KEYCODE_3D_MODE");
+        names.append(KEYCODE_CONTACTS, "KEYCODE_CONTACTS");
+        names.append(KEYCODE_CALENDAR, "KEYCODE_CALENDAR");
+        names.append(KEYCODE_MUSIC, "KEYCODE_MUSIC");
+        names.append(KEYCODE_CALCULATOR, "KEYCODE_CALCULATOR");
+        /* add by Gary. start {{----------------------------------- */
+        /* 2011-10-27 */
+        /* add some new keys for TVD */
+        names.append(KEYCODE_TV_SYSTEM, "KEYCODE_TV_SYSTEM");
+        names.append(KEYCODE_GOTO     , "KEYCODE_GOTO");
+        names.append(KEYCODE_SUBTITLE , "KEYCODE_SUBTITLE");
+        names.append(KEYCODE_AUDIO    , "KEYCODE_AUDIO");
+        names.append(KEYCODE_ZOOM     , "KEYCODE_ZOOM");
+        names.append(KEYCODE_HELP     , "KEYCODE_HELP");
+        names.append(KEYCODE_FAVOURITE, "KEYCODE_FAVOURITE");
+        names.append(KEYCODE_LOOP     , "KEYCODE_LOOP");
+        names.append(KEYCODE_EXPAND   , "KEYCODE_EXPAND");
+        names.append(KEYCODE_MOUSE    , "KEYCODE_MOUSE");
+        names.append(KEYCODE_MOVIE    , "KEYCODE_MOVIE");
+        names.append(KEYCODE_APPS     , "KEYCODE_APPS");
+        names.append(KEYCODE_BROWSER  , "KEYCODE_BROWSER");
+        /* add by Gary. end   -----------------------------------}} */
     };
 
     // Symbolic names of all metakeys in bit order from least significant to most significant.

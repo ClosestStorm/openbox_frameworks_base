@@ -149,7 +149,7 @@ final class FragmentState implements Parcelable {
  * {@link Fragment#getFragmentManager() Fragment.getFragmentManager()}.
  *
  * <p>The Fragment class can be used many ways to achieve a wide variety of
- * results.  It is core, it represents a particular operation or interface
+ * results. In its core, it represents a particular operation or interface
  * that is running within a larger {@link Activity}.  A Fragment is closely
  * tied to the Activity it is in, and can not be used apart from one.  Though
  * Fragment defines its own lifecycle, that lifecycle is dependent on its
@@ -181,7 +181,8 @@ final class FragmentState implements Parcelable {
  *
  * While the Fragment API was introduced in
  * {@link android.os.Build.VERSION_CODES#HONEYCOMB}, a version of the API
- * is also available for use on older platforms.  See the blog post
+ * at is also available for use on older platforms through
+ * {@link android.support.v4.app.FragmentActivity}.  See the blog post
  * <a href="http://android-developers.blogspot.com/2011/03/fragments-for-all.html">
  * Fragments For All</a> for more details.
  *

@@ -250,6 +250,28 @@ enum {
     AKEYCODE_LANGUAGE_SWITCH = 204,
     AKEYCODE_MANNER_MODE     = 205,
     AKEYCODE_3D_MODE         = 206,
+    AKEYCODE_CONTACTS        = 207,
+    AKEYCODE_CALENDAR        = 208,
+    AKEYCODE_MUSIC           = 209,
+    AKEYCODE_CALCULATOR      = 210,
+    /* add by Gary. start {{----------------------------------- */
+    /* 2011-10-27 */
+    /* add some new keys for TVD */
+    AKEYCODE_TV_SYSTEM       = 10000,
+    AKEYCODE_GOTO            = 10001,
+    AKEYCODE_SUBTITLE        = 10002,
+    AKEYCODE_AUDIO           = 10003,
+    AKEYCODE_ZOOM            = 10004,
+    AKEYCODE_HELP            = 10005,
+    AKEYCODE_FAVOURITE       = 10006,
+    AKEYCODE_LOOP            = 10007,
+    AKEYCODE_EXPAND          = 10008,
+    AKEYCODE_MOUSE           = 10009,
+    AKEYCODE_MOVIE           = 10010,
+    AKEYCODE_APPS            = 10011,
+    AKEYCODE_BROWSER         = 10012,
+    AKEYCODE_SCREENSHOT      = 10013,
+    /* add by Gary. end   -----------------------------------}} */
 
     // NOTE: If you add a new keycode here you must also add it to several other files.
     //       Refer to frameworks/base/core/java/android/view/KeyEvent.java for the full list.

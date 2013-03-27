@@ -22,8 +22,16 @@ import com.android.internal.widget.SlidingTab;
 import com.android.internal.widget.WaveView;
 import com.android.internal.widget.multiwaveview.MultiWaveView;
 
+import java.util.List;
+import java.util.ArrayList;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.app.ActivityManager;
+import android.app.ActivityManager.RunningAppProcessInfo;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -68,10 +76,13 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
     private KeyguardStatusViewManager mStatusViewManager;
     private UnlockWidgetCommonMethods mUnlockWidgetMethods;
     private View mUnlockWidget;
+	
 
     private interface UnlockWidgetCommonMethods {
         // Update resources based on phone state
         public void updateResources();
+
+		public void updateResources(Context context);
 
         // Get the view associated with this widget
         public View getView();
@@ -105,7 +116,11 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
                     mSilentMode ? R.drawable.jog_tab_right_sound_on
                                 : R.drawable.jog_tab_right_sound_off);
         }
-
+		public void updateResources(Context context)
+		{
+					
+		}
+			
         /** {@inheritDoc} */
         public void onTrigger(View v, int whichHandle) {
             if (whichHandle == SlidingTab.OnTriggerListener.LEFT_HANDLE) {
@@ -169,7 +184,9 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
 
         public void updateResources() {
         }
-
+		public void updateResources(Context context)
+		{
+		}
         public View getView() {
             return mWaveView;
         }
@@ -185,6 +202,7 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
 
         private final MultiWaveView mMultiWaveView;
         private boolean mCameraDisabled;
+		private ArrayList<Intent> mIntentList = new ArrayList() ;
 
         MultiWaveViewMethods(MultiWaveView multiWaveView) {
             mMultiWaveView = multiWaveView;
@@ -213,6 +231,32 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
             mMultiWaveView.setTargetResources(resId);
         }
 
+		public void updateResources(Context context)		
+		{			
+			Log.v(TAG,"updateResources(Context context)");		
+			ArrayList<Drawable> drawableAl = new ArrayList();
+			final ActivityManager am = (ActivityManager)context.getSystemService(Context.ACTIVITY_SERVICE);			
+			final PackageManager pm = context.getPackageManager();			
+			drawableAl.add(getView().getResources().getDrawable(R.drawable.ic_lockscreen_unlock));
+			List<ActivityManager.RecentTaskInfo> recentLs = am.getRecentTasks(100, ActivityManager.RECENT_IGNORE_UNAVAILABLE);
+			for(int i=0;i<recentLs.size();i++)
+			{
+				try
+				{
+					drawableAl.add(pm.getActivityIcon(recentLs.get(i).baseIntent));
+					mIntentList.add(recentLs.get(i).baseIntent);
+					
+				}
+				catch(Exception e)
+				{
+					Log.v(TAG,"Catch Exception");
+				}
+			}
+			
+			mMultiWaveView.setTargetResources(drawableAl);
+			
+		}
+		
         public void onGrabbed(View v, int handle) {
 
         }
@@ -222,21 +266,24 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         }
 
         public void onTrigger(View v, int target) {
-            if (target == 0 || target == 1) { // 0 = unlock/portrait, 1 = unlock/landscape
-                mCallback.goToUnlockScreen();
-            } else if (target == 2 || target == 3) { // 2 = alt/portrait, 3 = alt/landscape
-                if (!mCameraDisabled) {
-                    // Start the Camera
-                    Intent intent = new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA);
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    mContext.startActivity(intent);
-                    mCallback.goToUnlockScreen();
-                } else {
-                    toggleRingMode();
-                    mUnlockWidgetMethods.updateResources();
-                    mCallback.pokeWakelock();
-                }
-            }
+			Log.v(TAG,"onTrigger = " + target);
+			if(target ==0)
+			{
+				mCallback.goToUnlockScreen();
+			}
+			else
+			{
+				if(mIntentList.get(target-1)!=null)
+				{
+					Intent intent = mIntentList.get(target-1);
+					intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY|Intent.FLAG_ACTIVITY_TASK_ON_HOME|Intent.FLAG_ACTIVITY_NEW_TASK);
+					/*final PackageManager pm = mContext.getPackageManager();	
+					pm.resolveActivity(intent, 0);*/
+					mContext.startActivity(intent);
+					mCallback.goToUnlockScreen();
+				}
+			
+			}
         }
 
         public void onGrabbedStateChange(View v, int handle) {
@@ -375,7 +422,7 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         }
 
         // Update widget with initial ring state
-        mUnlockWidgetMethods.updateResources();
+		mUnlockWidgetMethods.updateResources(context);
 
         if (DBG) Log.v(TAG, "*** LockScreen accel is "
                 + (mUnlockWidget.isHardwareAccelerated() ? "on":"off"));

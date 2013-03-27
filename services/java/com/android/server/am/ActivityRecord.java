@@ -80,7 +80,10 @@ final class ActivityRecord {
     ThumbnailHolder thumbHolder; // where our thumbnails should go.
     long launchTime;        // when we starting launching this activity
     long startTime;         // last time this activity was started
+    long lastVisibleTime;   // last time this activity became visible
     long cpuTimeAtResume;   // the cpu time of host process at the time of resuming activity
+    long pauseTime;         // last time we started pausing the activity
+    long launchTickTime;    // base time for launch tick messages
     Configuration configuration; // configuration activity was last running in
     CompatibilityInfo compat;// last used compatibility mode
     ActivityRecord resultTo; // who started this entry, so will get our reply
@@ -187,6 +190,10 @@ final class ActivityRecord {
             pw.print(prefix); pw.print("launchTime=");
                     TimeUtils.formatDuration(launchTime, pw); pw.print(" startTime=");
                     TimeUtils.formatDuration(startTime, pw); pw.println("");
+        }
+        if (lastVisibleTime != 0) {
+            pw.print(prefix); pw.print("lastVisibleTime=");
+                    TimeUtils.formatDuration(lastVisibleTime, pw); pw.println("");
         }
         if (waitingVisible || nowVisible) {
             pw.print(prefix); pw.print("waitingVisible="); pw.print(waitingVisible);
@@ -567,6 +574,32 @@ final class ActivityRecord {
         }
     }
 
+    void startLaunchTickingLocked() {
+        if (ActivityManagerService.IS_USER_BUILD) {
+            return;
+        }
+        if (launchTickTime == 0) {
+            launchTickTime = SystemClock.uptimeMillis();
+            continueLaunchTickingLocked();
+        }
+    }
+
+    boolean continueLaunchTickingLocked() {
+        if (launchTickTime != 0) {
+            Message msg = stack.mHandler.obtainMessage(ActivityStack.LAUNCH_TICK_MSG);
+            msg.obj = this;
+            stack.mHandler.removeMessages(ActivityStack.LAUNCH_TICK_MSG);
+            stack.mHandler.sendMessageDelayed(msg, ActivityStack.LAUNCH_TICK);
+            return true;
+        }
+        return false;
+    }
+
+    void finishLaunchTickingLocked() {
+        launchTickTime = 0;
+        stack.mHandler.removeMessages(ActivityStack.LAUNCH_TICK_MSG);
+    }
+
     // IApplicationToken
 
     public boolean mayFreezeScreenLocked(ProcessRecord app) {
@@ -622,6 +655,7 @@ final class ActivityRecord {
                 stack.mInitialStartTime = 0;
             }
             startTime = 0;
+            finishLaunchTickingLocked();
         }
     }
 
@@ -632,6 +666,7 @@ final class ActivityRecord {
                     ActivityManagerService.TAG, "windowsVisible(): " + this);
             if (!nowVisible) {
                 nowVisible = true;
+                lastVisibleTime = SystemClock.uptimeMillis();
                 if (!idle) {
                     // Instead of doing the full stop routine here, let's just
                     // hide any activities we now can, and let them stop when

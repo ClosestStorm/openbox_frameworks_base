@@ -29,6 +29,8 @@ import android.widget.TextView;
 
 import com.android.systemui.R;
 
+import android.view.View;
+
 public class BatteryController extends BroadcastReceiver {
     private static final String TAG = "StatusBar.BatteryController";
 
@@ -40,15 +42,29 @@ public class BatteryController extends BroadcastReceiver {
         mContext = context;
 
         IntentFilter filter = new IntentFilter();
-        filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+        /* delete by Gary. start {{----------------------------------- */
+        /* 2012-4-5 */
+        /* hide the battery icon in the statusbar */
+//        filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+        /* delete by Gary. end   -----------------------------------}} */
         context.registerReceiver(this, filter);
     }
 
     public void addIconView(ImageView v) {
+        /* add by Gary. start {{----------------------------------- */
+        /* 2012-4-5 */
+        /* hide the battery icon in the statusbar */
+        v.setVisibility(View.GONE);
+        /* add by Gary. end   -----------------------------------}} */
         mIconViews.add(v);
     }
 
     public void addLabelView(TextView v) {
+        /* add by Gary. start {{----------------------------------- */
+        /* 2012-4-5 */
+        /* hide the battery icon in the statusbar */
+        v.setVisibility(View.GONE);
+        /* add by Gary. end   -----------------------------------}} */
         mLabelViews.add(v);
     }
 

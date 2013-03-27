@@ -1032,7 +1032,17 @@ status_t EventHub::openDeviceLocked(const char *devicePath) {
 
         // 'Q' key support = cheap test of whether this is an alpha-capable kbd
         if (hasKeycodeLocked(device, AKEYCODE_Q)) {
-            device->classes |= INPUT_DEVICE_CLASS_ALPHAKEY;
+        /* modified by Gary. start {{----------------------------------- */
+        /* 2012-8-1 */
+        /* give a chance to still show soft keyboard when hard keyboard is pluged in */
+        //device->classes |= INPUT_DEVICE_CLASS_ALPHAKEY;
+            char value[PROPERTY_VALUE_MAX];
+            property_get("ro.sw.hidesoftkbwhenhardkbin", value, "0");
+            LOGD("--------------ro.sw.hidesoftkbwhenhardkbin is %s", value);
+            if (atoi(value)) {
+                device->classes |= INPUT_DEVICE_CLASS_ALPHAKEY;
+            }
+        /* add by Gary. end   -----------------------------------}} */
         }
 
         // See if this device has a DPAD.

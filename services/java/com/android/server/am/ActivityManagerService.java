@@ -105,6 +105,7 @@ import android.os.StrictMode;
 import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.provider.Settings;
+import android.text.format.Time;
 import android.util.EventLog;
 import android.util.Pair;
 import android.util.Slog;
@@ -129,7 +130,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -186,6 +186,8 @@ public final class ActivityManagerService extends ActivityManagerNative
     static final int STOCK_PM_FLAGS = PackageManager.GET_SHARED_LIBRARY_FILES;
     
     private static final String SYSTEM_DEBUGGABLE = "ro.debuggable";
+
+    static final boolean IS_USER_BUILD = "user".equals(Build.TYPE);
 
     // Maximum number of recent tasks that we can remember.
     static final int MAX_RECENT_TASKS = 20;
@@ -260,6 +262,12 @@ public final class ActivityManagerService extends ActivityManagerNative
     static final String[] EMPTY_STRING_ARRAY = new String[0];
 
     public ActivityStack mMainStack;
+    
+    /* add by Gary. start {{----------------------------------- */
+    /* 2012-9-8 */
+    /* launch the defualt launcher when the system boots for the first time */
+    private boolean mFirstLaunch = false;
+    /* add by Gary. end   -----------------------------------}} */
     
     /**
      * Description of a request to start a new activity, which has been held
@@ -415,7 +423,12 @@ public final class ActivityManagerService extends ActivityManagerNative
      * is in a different process from the one they are currently in.
      */
     ProcessRecord mPreviousProcess;
-    
+
+    /**
+     * The time at which the previous process was last visible.
+     */
+    long mPreviousProcessVisibleTime;
+
     /**
      * Packages that the user has asked to have run in screen size
      * compatibility mode instead of filling the screen.
@@ -1222,6 +1235,23 @@ public final class ActivityManagerService extends ActivityManagerNative
                     @Override public void run() {
                         StringBuilder dropBuilder = new StringBuilder(1024);
                         StringBuilder logBuilder = new StringBuilder(1024);
+                        StringWriter oomSw = new StringWriter();
+                        PrintWriter oomPw = new PrintWriter(oomSw);
+                        StringWriter catSw = new StringWriter();
+                        PrintWriter catPw = new PrintWriter(catSw);
+                        String[] emptyArgs = new String[] { };
+                        StringBuilder tag = new StringBuilder(128);
+                        StringBuilder stack = new StringBuilder(128);
+                        tag.append("Low on memory -- ");
+                        dumpApplicationMemoryUsage(null, oomPw, "  ", emptyArgs, true, catPw,
+                                tag, stack);
+                        dropBuilder.append(stack);
+                        dropBuilder.append('\n');
+                        dropBuilder.append('\n');
+                        String oomString = oomSw.toString();
+                        dropBuilder.append(oomString);
+                        dropBuilder.append('\n');
+                        logBuilder.append(oomString);
                         try {
                             java.lang.Process proc = Runtime.getRuntime().exec(new String[] {
                                     "procrank", });
@@ -1244,27 +1274,15 @@ public final class ActivityManagerService extends ActivityManagerNative
                             converter.close();
                         } catch (IOException e) {
                         }
-                        StringWriter sw = new StringWriter();
-                        PrintWriter pw = new PrintWriter(sw);
-                        StringWriter catSw = new StringWriter();
-                        PrintWriter catPw = new PrintWriter(catSw);
-                        String[] emptyArgs = new String[] { };
-                        StringBuilder tag = new StringBuilder(128);
                         synchronized (ActivityManagerService.this) {
+                            catPw.println();
                             dumpProcessesLocked(null, catPw, emptyArgs, 0, false, null);
                             catPw.println();
                             dumpServicesLocked(null, catPw, emptyArgs, 0, false, false, null);
                             catPw.println();
                             dumpActivitiesLocked(null, catPw, emptyArgs, 0, false, false, null);
-                            catPw.println();
                         }
-                        tag.append("Low on memory -- ");
-                        dumpApplicationMemoryUsage(null, pw, "  ", emptyArgs, true, catPw, tag);
-                        String memUsage = sw.toString();
-                        dropBuilder.append('\n');
-                        dropBuilder.append(memUsage);
                         dropBuilder.append(catSw.toString());
-                        logBuilder.append(memUsage);
                         addErrorToDropBox("lowmem", null, "system_server", null,
                                 null, tag.toString(), dropBuilder.toString(), null, null);
                         Slog.i(TAG, logBuilder.toString());
@@ -1420,7 +1438,7 @@ public final class ActivityManagerService extends ActivityManagerNative
             }
 
             mActivityManagerService.dumpApplicationMemoryUsage(fd, pw, "  ", args,
-                    false, null, null);
+                    false, null, null, null);
         }
     }
 
@@ -2021,7 +2039,88 @@ public final class ActivityManagerService extends ActivityManagerNative
         }
     }
 
+    /* add by Gary. start {{----------------------------------- */
+    /* 2012-9-8 */
+    /* launch the defualt launcher when the system boots for the first time */
+	private void setDefaultLauncher()
+	{
+	    // get default component
+	    String  packageName = SystemProperties.get("ro.sw.defaultlauncherpackage", "no");
+	    String  className = SystemProperties.get("ro.sw.defaultlauncherclass", "no");
+	    Slog.i(TAG, "defautl packageName = " + packageName + ", default className = " + className);
+	    if(!packageName.equals("no") && !className.equals("no")){
+	        boolean firstLaunch = SystemProperties.getBoolean("persist.sys.sw.firstLaunch", true);
+	        Slog.d(TAG, "firstLaunch = " + firstLaunch);
+	        if(firstLaunch){
+	            mFirstLaunch = true;
+                // do this only for the first boot 
+                SystemProperties.set("persist.sys.sw.firstLaunch", "false");
+            }
+            Slog.d(TAG, "mFirstLaunch = " + mFirstLaunch);
+	        if(mFirstLaunch){
+        		IPackageManager pm = ActivityThread.getPackageManager();
+                
+                //clear the current preferred launcher
+        		ArrayList<IntentFilter> intentList = new ArrayList<IntentFilter>();
+        		ArrayList<ComponentName> cnList = new ArrayList<ComponentName>();
+        		mContext.getPackageManager().getPreferredActivities(intentList, cnList, null);
+        		IntentFilter dhIF;
+        		for(int i = 0; i < cnList.size(); i++)
+        		{
+        			dhIF = intentList.get(i);
+        			if(dhIF.hasAction(Intent.ACTION_MAIN) &&
+        			dhIF.hasCategory(Intent.CATEGORY_HOME)) 
+        			{
+        				mContext.getPackageManager().clearPackagePreferredActivities(cnList.get(i).getPackageName());
+        			}
+        		}
+                
+                // get all Launcher activities
+        		Intent intent = new Intent(Intent.ACTION_MAIN);
+        		intent.addCategory(Intent.CATEGORY_HOME);
+        		List<ResolveInfo> list = new ArrayList<ResolveInfo>();
+        		try 
+        		{
+        			list = pm.queryIntentActivities(intent,
+                        intent.resolveTypeIfNeeded(mContext.getContentResolver()),
+                        PackageManager.MATCH_DEFAULT_ONLY);
+        		}catch (RemoteException e) {
+                    throw new RuntimeException("Package manager has died", e);
+                } 
+                // get all components and the best match
+        		IntentFilter filter = new IntentFilter();
+        		filter.addAction(Intent.ACTION_MAIN);
+        		filter.addCategory(Intent.CATEGORY_HOME);
+        		filter.addCategory(Intent.CATEGORY_DEFAULT);
+        		final int N = list.size();
+                ComponentName[] set = new ComponentName[N];
+                int bestMatch = 0;
+        		for (int i = 0; i < N; i++)
+        		{
+        			ResolveInfo r = list.get(i);
+        			set[i] = new ComponentName(r.activityInfo.packageName,
+                                    r.activityInfo.name);
+        			if (r.match > bestMatch) bestMatch = r.match;
+        		}
+        		// add the default launcher as the preferred launcher
+        		ComponentName launcher = new ComponentName(packageName, className);
+        		try 
+        		{
+        			pm.addPreferredActivity(filter, bestMatch, set, launcher);
+        		} catch (RemoteException e) {
+                    throw new RuntimeException("Package manager has died", e);
+                } 
+            }
+	    }
+	}
+    /* add by Gary. end   -----------------------------------}} */
+
     boolean startHomeActivityLocked() {
+        /* add by Gary. start {{----------------------------------- */
+        /* 2012-9-8 */
+        /* launch the defualt launcher when the system boots for the first time */
+		setDefaultLauncher();
+        /* add by Gary. end   -----------------------------------}} */
         if (mFactoryTest == SystemServer.FACTORY_TEST_LOW_LEVEL
                 && mTopAction == null) {
             // We are running in factory test mode, but unable to find
@@ -2716,15 +2815,12 @@ public final class ActivityManagerService extends ActivityManagerNative
                     }
                     if (!r.finishing) {
                         Slog.w(TAG, "Force removing " + r + ": app died, no saved state");
+                        EventLog.writeEvent(EventLogTags.AM_FINISH_ACTIVITY,
+                                System.identityHashCode(r),
+                                r.task.taskId, r.shortComponentName,
+                                "proc died without state saved");
                     }
-                    r.makeFinishing();
-                    mMainStack.mHistory.remove(i);
-                    r.takeFromHistory();
-                    mWindowManager.removeAppToken(r.appToken);
-                    if (VALIDATE_TOKENS) {
-                        mMainStack.validateAppTokensLocked();
-                    }
-                    r.removeUriPermissionsLocked();
+                    mMainStack.removeActivityFromHistoryLocked(r);
 
                 } else {
                     // We have the current state for this activity, so
@@ -2898,6 +2994,12 @@ public final class ActivityManagerService extends ActivityManagerNative
             return null;
         }
 
+        dumpStackTraces(tracesPath, firstPids, processStats, lastPids);
+        return tracesFile;
+    }
+
+    private static void dumpStackTraces(String tracesPath, ArrayList<Integer> firstPids,
+            ProcessStats processStats, SparseArray<Boolean> lastPids) {
         // Use a FileObserver to detect when traces finish writing.
         // The order of traces is considered important to maintain for legibility.
         FileObserver observer = new FileObserver(tracesPath, FileObserver.CLOSE_WRITE) {
@@ -2908,16 +3010,18 @@ public final class ActivityManagerService extends ActivityManagerNative
             observer.startWatching();
 
             // First collect all of the stacks of the most important pids.
-            try {
-                int num = firstPids.size();
-                for (int i = 0; i < num; i++) {
-                    synchronized (observer) {
-                        Process.sendSignal(firstPids.get(i), Process.SIGNAL_QUIT);
-                        observer.wait(200);  // Wait for write-close, give up after 200msec
+            if (firstPids != null) {
+                try {
+                    int num = firstPids.size();
+                    for (int i = 0; i < num; i++) {
+                        synchronized (observer) {
+                            Process.sendSignal(firstPids.get(i), Process.SIGNAL_QUIT);
+                            observer.wait(200);  // Wait for write-close, give up after 200msec
+                        }
                     }
+                } catch (InterruptedException e) {
+                    Log.wtf(TAG, e);
                 }
-            } catch (InterruptedException e) {
-                Log.wtf(TAG, e);
             }
 
             // Next measure CPU usage.
@@ -2953,8 +3057,6 @@ public final class ActivityManagerService extends ActivityManagerNative
                 }
             }
 
-            return tracesFile;
-
         } finally {
             observer.stopWatching();
         }
@@ -2972,6 +3074,78 @@ public final class ActivityManagerService extends ActivityManagerNative
         @Override
         public void run() {
             appNotResponding(mApp, null, null, mAnnotation);
+        }
+    }
+
+    final void logAppTooSlow(ProcessRecord app, long startTime, String msg) {
+        if (IS_USER_BUILD) {
+            return;
+        }
+        String tracesPath = SystemProperties.get("dalvik.vm.stack-trace-file", null);
+        if (tracesPath == null || tracesPath.length() == 0) {
+            return;
+        }
+
+        StrictMode.ThreadPolicy oldPolicy = StrictMode.allowThreadDiskReads();
+        StrictMode.allowThreadDiskWrites();
+        try {
+            final File tracesFile = new File(tracesPath);
+            final File tracesDir = tracesFile.getParentFile();
+            final File tracesTmp = new File(tracesDir, "__tmp__");
+            try {
+                if (!tracesDir.exists()) tracesFile.mkdirs();
+                FileUtils.setPermissions(tracesDir.getPath(), 0775, -1, -1);  // drwxrwxr-x
+
+                if (tracesFile.exists()) {
+                    tracesTmp.delete();
+                    tracesFile.renameTo(tracesTmp);
+                }
+                StringBuilder sb = new StringBuilder();
+                Time tobj = new Time();
+                tobj.set(System.currentTimeMillis());
+                sb.append(tobj.format("%Y-%m-%d %H:%M:%S"));
+                sb.append(": ");
+                TimeUtils.formatDuration(SystemClock.uptimeMillis()-startTime, sb);
+                sb.append(" since ");
+                sb.append(msg);
+                FileOutputStream fos = new FileOutputStream(tracesFile);
+                fos.write(sb.toString().getBytes());
+                if (app == null) {
+                    fos.write("\n*** No application process!".getBytes());
+                }
+                fos.close();
+                FileUtils.setPermissions(tracesFile.getPath(), 0666, -1, -1); // -rw-rw-rw-
+            } catch (IOException e) {
+                Slog.w(TAG, "Unable to prepare slow app traces file: " + tracesPath, e);
+                return;
+            }
+
+            if (app != null) {
+                ArrayList<Integer> firstPids = new ArrayList<Integer>();
+                firstPids.add(app.pid);
+                dumpStackTraces(tracesPath, firstPids, null, null);
+            }
+
+            File lastTracesFile = null;
+            File curTracesFile = null;
+            for (int i=9; i>=0; i--) {
+                String name = String.format("slow%02d.txt", i);
+                curTracesFile = new File(tracesDir, name);
+                if (curTracesFile.exists()) {
+                    if (lastTracesFile != null) {
+                        curTracesFile.renameTo(lastTracesFile);
+                    } else {
+                        curTracesFile.delete();
+                    }
+                }
+                lastTracesFile = curTracesFile;
+            }
+            tracesFile.renameTo(curTracesFile);
+            if (tracesTmp.exists()) {
+                tracesTmp.renameTo(tracesFile);
+            }
+        } finally {
+            StrictMode.setThreadPolicy(oldPolicy);
         }
     }
 
@@ -8353,6 +8527,12 @@ public final class ActivityManagerService extends ActivityManagerNative
         pw.println();
         pw.println("  mHomeProcess: " + mHomeProcess);
         pw.println("  mPreviousProcess: " + mPreviousProcess);
+        if (dumpAll) {
+            StringBuilder sb = new StringBuilder(128);
+            sb.append("  mPreviousProcessVisibleTime: ");
+            TimeUtils.formatDuration(mPreviousProcessVisibleTime, sb);
+            pw.println(sb);
+        }
         if (mHeavyWeightProcess != null) {
             pw.println("  mHeavyWeightProcess: " + mHeavyWeightProcess);
         }
@@ -9416,7 +9596,7 @@ public final class ActivityManagerService extends ActivityManagerNative
             } else if (r.setAdj >= ProcessList.SERVICE_ADJ) {
                 oomAdj = buildOomTag("svc  ", null, r.setAdj, ProcessList.SERVICE_ADJ);
             } else if (r.setAdj >= ProcessList.BACKUP_APP_ADJ) {
-                oomAdj = buildOomTag("bckup", null, r.setAdj, ProcessList.BACKUP_APP_ADJ);
+                oomAdj = buildOomTag("bkup ", null, r.setAdj, ProcessList.BACKUP_APP_ADJ);
             } else if (r.setAdj >= ProcessList.HEAVY_WEIGHT_APP_ADJ) {
                 oomAdj = buildOomTag("hvy  ", null, r.setAdj, ProcessList.HEAVY_WEIGHT_APP_ADJ);
             } else if (r.setAdj >= ProcessList.PERCEPTIBLE_APP_ADJ) {
@@ -9645,7 +9825,8 @@ public final class ActivityManagerService extends ActivityManagerNative
         1*1024*1024, 2*1024*1024, 5*1024*1024, 10*1024*1024, 20*1024*1024
     };
 
-    static final void appendMemBucket(StringBuilder out, long memKB, String label) {
+    static final void appendMemBucket(StringBuilder out, long memKB, String label,
+            boolean stackLike) {
         int start = label.lastIndexOf('.');
         if (start >= 0) start++;
         else start = 0;
@@ -9654,13 +9835,13 @@ public final class ActivityManagerService extends ActivityManagerNative
             if (DUMP_MEM_BUCKETS[i] >= memKB) {
                 long bucket = DUMP_MEM_BUCKETS[i]/1024;
                 out.append(bucket);
-                out.append("MB ");
+                out.append(stackLike ? "MB." : "MB ");
                 out.append(label, start, end);
                 return;
             }
         }
         out.append(memKB/1024);
-        out.append("MB ");
+        out.append(stackLike ? "MB." : "MB ");
         out.append(label, start, end);
     }
 
@@ -9679,7 +9860,7 @@ public final class ActivityManagerService extends ActivityManagerNative
 
     final void dumpApplicationMemoryUsage(FileDescriptor fd,
             PrintWriter pw, String prefix, String[] args, boolean brief,
-            PrintWriter categoryPw, StringBuilder outTag) {
+            PrintWriter categoryPw, StringBuilder outTag, StringBuilder outStack) {
         boolean dumpAll = false;
         boolean oomOnly = false;
         
@@ -9816,8 +9997,14 @@ public final class ActivityManagerService extends ActivityManagerNative
                 }
             }
 
-            if (outTag != null) {
-                appendMemBucket(outTag, totalPss, "total");
+            if (outTag != null || outStack != null) {
+                if (outTag != null) {
+                    appendMemBucket(outTag, totalPss, "total", false);
+                }
+                if (outStack != null) {
+                    appendMemBucket(outStack, totalPss, "total", true);
+                }
+                boolean firstLine = true;
                 for (int i=0; i<oomMems.size(); i++) {
                     MemItem miCat = oomMems.get(i);
                     if (miCat.subitems == null || miCat.subitems.size() < 1) {
@@ -9826,13 +10013,47 @@ public final class ActivityManagerService extends ActivityManagerNative
                     if (miCat.id < ProcessList.SERVICE_ADJ
                             || miCat.id == ProcessList.HOME_APP_ADJ
                             || miCat.id == ProcessList.PREVIOUS_APP_ADJ) {
-                        outTag.append(" / ");
+                        if (outTag != null && miCat.id <= ProcessList.FOREGROUND_APP_ADJ) {
+                            outTag.append(" / ");
+                        }
+                        if (outStack != null) {
+                            if (miCat.id >= ProcessList.FOREGROUND_APP_ADJ) {
+                                if (firstLine) {
+                                    outStack.append(":");
+                                    firstLine = false;
+                                }
+                                outStack.append("\n\t at ");
+                            } else {
+                                outStack.append("$");
+                            }
+                        }
                         for (int j=0; j<miCat.subitems.size(); j++) {
                             MemItem mi = miCat.subitems.get(j);
                             if (j > 0) {
-                                outTag.append(" ");
+                                if (outTag != null) {
+                                    outTag.append(" ");
+                                }
+                                if (outStack != null) {
+                                    outStack.append("$");
+                                }
                             }
-                            appendMemBucket(outTag, mi.pss, mi.shortLabel);
+                            if (outTag != null && miCat.id <= ProcessList.FOREGROUND_APP_ADJ) {
+                                appendMemBucket(outTag, mi.pss, mi.shortLabel, false);
+                            }
+                            if (outStack != null) {
+                                appendMemBucket(outStack, mi.pss, mi.shortLabel, true);
+                            }
+                        }
+                        if (outStack != null && miCat.id >= ProcessList.FOREGROUND_APP_ADJ) {
+                            outStack.append("(");
+                            for (int k=0; k<DUMP_MEM_OOM_ADJ.length; k++) {
+                                if (DUMP_MEM_OOM_ADJ[k] == miCat.id) {
+                                    outStack.append(DUMP_MEM_OOM_LABEL[k]);
+                                    outStack.append(":");
+                                    outStack.append(DUMP_MEM_OOM_ADJ[k]);
+                                }
+                            }
+                            outStack.append(")");
                         }
                     }
                 }
@@ -13551,6 +13772,7 @@ public final class ActivityManagerService extends ActivityManagerNative
                         adj = ProcessList.PERCEPTIBLE_APP_ADJ;
                         app.adjType = "stopping";
                     }
+                    app.hidden = false;
                     app.foregroundActivities = true;
                 }
             }
@@ -14199,7 +14421,7 @@ public final class ActivityManagerService extends ActivityManagerNative
 
         if (app.curAdj != app.setAdj) {
             if (Process.setOomAdj(app.pid, app.curAdj)) {
-                if (true || DEBUG_SWITCH || DEBUG_OOM_ADJ) Slog.v(
+                if (DEBUG_SWITCH || DEBUG_OOM_ADJ) Slog.v(
                     TAG, "Set " + app.pid + " " + app.processName +
                     " adj " + app.curAdj + ": " + app.adjType);
                 app.setAdj = app.curAdj;
@@ -14358,10 +14580,16 @@ public final class ActivityManagerService extends ActivityManagerNative
                             app.thread.scheduleTrimMemory(curLevel);
                         } catch (RemoteException e) {
                         }
-                        if (curLevel >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
-                            // For these apps we will also finish their activities
-                            // to help them free memory.
-                            mMainStack.destroyActivitiesLocked(app, false, "trim");
+                        if (false) {
+                            // For now we won't do this; our memory trimming seems
+                            // to be good enough at this point that destroying
+                            // activities causes more harm than good.
+                            if (curLevel >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE
+                                    && app != mHomeProcess && app != mPreviousProcess) {
+                                // For these apps we will also finish their activities
+                                // to help them free memory.
+                                mMainStack.destroyActivitiesLocked(app, false, "trim");
+                            }
                         }
                     }
                     app.trimMemoryLevel = curLevel;

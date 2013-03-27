@@ -95,6 +95,15 @@ public class InputManager implements Watchdog.Monitor {
             InputChannel toChannel);
     private static native void nativeSetPointerSpeed(int speed);
     private static native void nativeSetShowTouches(boolean enabled);
+
+	//reset tp correct params
+	private static native void nativeResetTouchCalibration();
+	private static native void nativeKeyEnterMouseMode();
+	private static native void nativeKeyExitMouseMode();
+	private static native void nativeKeySetMouseDistance(int distance);
+	private static native void nativeKeySetMouseMoveCode(int left,int right,int top,int bottom);
+	private static native void nativeKeySetMouseBtnCode(int leftbtn,int midbtn,int rightbtn);
+	
     private static native String nativeDump();
     private static native void nativeMonitor();
     
@@ -173,8 +182,14 @@ public class InputManager implements Watchdog.Monitor {
         }
         
         if (DEBUG) {
+			
             Slog.d(TAG, "Setting display #" + displayId + " orientation to " + rotation);
         }
+		if(SystemProperties.getInt("ro.sf.hwrotation",0)==270)
+		{			
+			rotation =(rotation+3)%4;
+		}
+
         nativeSetDisplayOrientation(displayId, rotation);
     }
     
@@ -248,7 +263,39 @@ public class InputManager implements Watchdog.Monitor {
         
         return nativeHasKeys(deviceId, sourceMask, keyCodes, keyExists);
     }
-    
+
+	/**
+	 *reset the tp correct params
+	 */
+	public void resetTouchCalibration()
+	{
+		nativeResetTouchCalibration();
+	}
+
+	public void KeyEnterMouseMode()
+	{
+		nativeKeyEnterMouseMode();
+	}
+
+	public void KeyExitMouseMode()
+	{
+		nativeKeyExitMouseMode();
+	}
+
+	public void KeySetMouseDistance(int distance)
+	{
+		nativeKeySetMouseDistance(distance);
+	}
+
+	public void KeySetMouseMoveCode(int left,int right,int top,int bottom)
+	{
+		nativeKeySetMouseMoveCode(left,right,top,bottom);
+	}
+
+	public void KeySetMouseBtnCode(int leftbtn,int midbtn,int rightbtn)
+	{
+		nativeKeySetMouseBtnCode(leftbtn,midbtn,rightbtn);
+	}		 
     /**
      * Creates an input channel that will receive all input from the input dispatcher.
      * @param inputChannelName The input channel name.

@@ -255,7 +255,7 @@ bool NuPlayer::Renderer::onDrainAudioQueue() {
             int64_t mediaTimeUs;
             CHECK(entry->mBuffer->meta()->findInt64("timeUs", &mediaTimeUs));
 
-            LOGV("rendering audio at media time %.2f secs", mediaTimeUs / 1E6);
+            LOGV("rendering audio at media time %.3f secs", mediaTimeUs / 1E6);
 
             mAnchorTimeMediaUs = mediaTimeUs;
 
@@ -373,12 +373,12 @@ void NuPlayer::Renderer::onDrainVideoQueue() {
     int64_t realTimeUs = mediaTimeUs - mAnchorTimeMediaUs + mAnchorTimeRealUs;
     mVideoLateByUs = ALooper::GetNowUs() - realTimeUs;
 
-    bool tooLate = (mVideoLateByUs > 40000);
+    bool tooLate = (mVideoLateByUs > 40000*3); //default is 40000
 
     if (tooLate) {
-        LOGV("video late by %lld us (%.2f secs)", lateByUs, lateByUs / 1E6);
+        LOGV("video late by %lld us (%.2f secs)", mVideoLateByUs, mVideoLateByUs / 1E6);
     } else {
-        LOGV("rendering video at media time %.2f secs", mediaTimeUs / 1E6);
+        LOGV("rendering video at media time %.3f secs", mediaTimeUs / 1E6);
     }
 
     entry->mNotifyConsumed->setInt32("render", !tooLate);
@@ -430,6 +430,11 @@ void NuPlayer::Renderer::onQueueBuffer(const sp<AMessage> &msg) {
     } else {
         mVideoQueue.push_back(entry);
         postDrainVideoQueue();
+#if 0
+        uint8_t *p;
+        p = buffer->data();
+        LOGV("size:%d bytes:%x %x %x %x %x %x %x %x",buffer->size(), p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7]);
+#endif
     }
 
     if (!mSyncQueues || mAudioQueue.empty() || mVideoQueue.empty()) {
@@ -628,11 +633,16 @@ void NuPlayer::Renderer::onPause() {
         mAudioSink->pause();
     }
 
+    LOGV("now paused audio queue has %d entries, video has %d entries",
+         mAudioQueue.size(), mVideoQueue.size());
+
     mPaused = true;
 }
 
 void NuPlayer::Renderer::onResume() {
-    CHECK(mPaused);
+    if (!mPaused) {
+        return;
+    }
 
     if (mHasAudio) {
         mAudioSink->start();
